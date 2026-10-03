@@ -62,5 +62,7 @@ These are the simplest reasonable defaults so Phases 4–6 can proceed; confirm 
 
 | 2026-10-03 | Website is a responsive desktop-first website for all roles (supersedes the earlier "phone-style column" direction); Flutter is a separate customer app sharing API, tokens and screen specs | Staff/admin need a real website; app is a different product |
 
+| 2026-10-03 | **Mobile app is customer-only.** Station employees, city managers and admins use the website (responsive, works on phone/tablet). A separate staff app is planned later (not now; revisit in Phase 12 for QR scanning, offline and smart locks) and would share the Flutter codebase, API client and tokens | Keeps staff/admin code out of the public app; each app fits its users |
+
 ## 8. Open questions
 See the end of the planning summary / `docs/PHASES.md` §Open decisions. Resolve before the phase noted.

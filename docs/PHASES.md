@@ -97,6 +97,7 @@ Each phase ends with a usable increment and a completion checklist. Don't start 
 - **Outcome:** Live fleet view driven by simulator; history queryable.
 
 ## Phase 12 — IoT & Production
+**Decision to revisit here:** whether to build a separate staff mobile app (QR scanning, offline station use, smart locks). Until then staff use the website. The customer app never includes staff or admin features.
 - **Objective:** Hardware integration and production readiness.
 - **Features:** QR vehicle identification; device↔vehicle mapping; smart-lock lock/unlock (`LockProvider`); real-time channel; monitoring, structured logging; security hardening; backups; CI/CD; broader automated tests; production deployment.
 - **Depends on:** 11, 10.

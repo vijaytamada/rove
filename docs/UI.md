@@ -11,7 +11,7 @@ Working name: **Rove**. Wordmark: lowercase `rove` in Inter 600, near-black, wit
 
 | Topic | Website (Next.js) | Mobile app (Flutter) |
 |---|---|---|
-| Users | Customers, station employees, city managers, super admins | Customers (staff may sign in; staff tools stay on the website) |
+| Users | Customers, station employees, city managers, super admins | **Customers only.** Staff and admins use the website; a separate staff app may be planned later (decision 2026-10-03) |
 | Layout | Responsive. Desktop: top navigation, wide content (max 6xl), split-screen sign-in. Phones: compact header + bottom tabs | Native phone UI: app bar, bottom navigation, sheets |
 | Staff/admin | Console layout: sidebar on desktop, top bar with links on phones | Not in the app |
 | Install | Optional PWA (manifest) | App store build |
