@@ -3,7 +3,9 @@
 Station-based e-scooter rental: browse → book → pay → pick up → ride → return → settle.
 Modular-monolith NestJS backend, Next.js web, Flutter mobile. Mock integrations first; real OTP/KYC/payments/IoT in later phases.
 
-**Status:** Planning complete (Phase 0). Next: Phase 1 — Project Foundation.
+**Status:** Phases 1-3 complete (auth and roles, cities, stations, fleet, admin console, customer app browsing), plus phone + OTP sign-in for customers. Next: Phase 4 — Booking. See `docs/PHASES.md`.
+
+**Branches:** `main` is the last tested state; `dev` is where work happens (see `docs/DEV_SETUP.md` §9).
 
 ## Layout
 | Path | What |

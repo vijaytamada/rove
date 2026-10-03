@@ -89,3 +89,18 @@ Other local projects use 5432/6379, which is why Rove uses 5442/6389. Change via
 | Emulator crashes or freezes | Close other emulators; 4 GB RAM each. If it persists check GPU: AVD `hw.gpu.mode` (`host` = GPU, `swiftshader_indirect` = software) |
 | `flutter devices` shows emulator "offline" | Wait for boot to finish; `adb kill-server` then `adb devices` |
 | Android Studio device dialog hides the system image | Pixel 10 profile wants API 36+; API 35 images show as "unsupported" there but still work |
+
+## 9. Branches and workflow
+Two long-lived branches only:
+
+| Branch | Purpose |
+|---|---|
+| `main` | Last fully tested, releasable state. Never commit work directly here |
+| `dev` | Day-to-day work. Commit here |
+
+1. `git checkout dev` and work there.
+2. When a piece of work is finished, run the checks in `docs/TESTING.md` (backend tests, website lint + build, Flutter tests + analyze, the three `tools/qa` scripts).
+3. Merge into `main` with a merge commit: `git checkout main`, `git merge --no-ff dev`, then `git checkout dev` again.
+4. Short-lived branches for a risky change are fine; delete them once merged so only `main` and `dev` remain.
+
+No remote is configured yet. To publish, add one (`git remote add origin <url>`) and push both branches (`git push -u origin main dev`).
