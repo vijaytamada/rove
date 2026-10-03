@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 /// Label above the field (matches the website), with an inline error and optional hint.
 class AppTextField extends StatelessWidget {
@@ -16,6 +17,9 @@ class AppTextField extends StatelessWidget {
     this.maxLength,
     this.validator,
     this.onSubmitted,
+    this.onChanged,
+    this.inputFormatters,
+    this.autofocus = false,
   });
 
   final String label;
@@ -30,6 +34,9 @@ class AppTextField extends StatelessWidget {
   final int? maxLength;
   final String? Function(String?)? validator;
   final ValueChanged<String>? onSubmitted;
+  final ValueChanged<String>? onChanged;
+  final List<TextInputFormatter>? inputFormatters;
+  final bool autofocus;
 
   @override
   Widget build(BuildContext context) {
@@ -47,6 +54,9 @@ class AppTextField extends StatelessWidget {
           maxLength: maxLength,
           validator: validator,
           onFieldSubmitted: onSubmitted,
+          onChanged: onChanged,
+          inputFormatters: inputFormatters,
+          autofocus: autofocus,
           decoration: InputDecoration(
             hintText: hint,
             helperText: helper,

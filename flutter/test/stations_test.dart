@@ -44,9 +44,10 @@ Future<void> openStations(WidgetTester tester, TestEnv env) async {
   await env.auth.init();
   await tester.pumpWidget(RoveApp(auth: env.auth));
   await tester.pumpAndSettle();
-  await tester.enterText(find.byType(TextFormField).at(0), 'asha@example.com');
-  await tester.enterText(find.byType(TextFormField).at(1), 'secret-pass');
-  await tester.tap(find.widgetWithText(FilledButton, 'Sign in'));
+  await tester.enterText(find.byType(TextFormField), '9876543210');
+  await tester.tap(find.widgetWithText(FilledButton, 'Send code'));
+  await tester.pumpAndSettle();
+  await tester.enterText(find.byType(TextFormField), '123456'); // submits at 6 digits
   await tester.pumpAndSettle();
   await tester.tap(find.descendant(of: find.byType(NavigationBar), matching: find.text('Stations')));
   await tester.pumpAndSettle();
@@ -56,7 +57,8 @@ void main() {
   testWidgets('lists stations of the first city and opens a station with its scooters', (tester) async {
     final env = TestEnv((r) async {
       final path = r.url.path;
-      if (path.endsWith('/auth/login')) return authOk();
+      if (path.endsWith('/auth/phone/request')) return codeSent();
+      if (path.endsWith('/auth/phone/verify')) return authOk();
       if (path.endsWith('/cities')) {
         return json(200, [
           {'id': 'c1', 'name': 'Bengaluru', 'state': 'Karnataka', 'timezone': 'Asia/Kolkata', 'isActive': true},
@@ -101,7 +103,8 @@ void main() {
   testWidgets('shows an empty message for a station without scooters', (tester) async {
     final env = TestEnv((r) async {
       final path = r.url.path;
-      if (path.endsWith('/auth/login')) return authOk();
+      if (path.endsWith('/auth/phone/request')) return codeSent();
+      if (path.endsWith('/auth/phone/verify')) return authOk();
       if (path.endsWith('/cities')) return json(200, [{'id': 'c1', 'name': 'Bengaluru', 'state': 'K'}]);
       if (path.endsWith('/stations')) return json(200, [station('s1', 'Indiranagar', 0)]);
       return json(200, <dynamic>[]);
@@ -117,7 +120,8 @@ void main() {
     var fail = true;
     final env = TestEnv((r) async {
       final path = r.url.path;
-      if (path.endsWith('/auth/login')) return authOk();
+      if (path.endsWith('/auth/phone/request')) return codeSent();
+      if (path.endsWith('/auth/phone/verify')) return authOk();
       if (path.endsWith('/cities')) {
         return fail ? apiError(500, 'INTERNAL_ERROR', 'Something went wrong. Try again.') : json(200, [{'id': 'c1', 'name': 'Bengaluru', 'state': 'K'}]);
       }
@@ -133,7 +137,12 @@ void main() {
   });
 
   testWidgets('shows a message when no city is open', (tester) async {
-    final env = TestEnv((r) async => r.url.path.endsWith('/auth/login') ? authOk() : json(200, <dynamic>[]));
+    final env = TestEnv((r) async {
+      final path = r.url.path;
+      if (path.endsWith('/auth/phone/request')) return codeSent();
+      if (path.endsWith('/auth/phone/verify')) return authOk();
+      return json(200, <dynamic>[]);
+    });
     await openStations(tester, env);
     expect(find.textContaining('No cities are open yet'), findsOneWidget);
   });

@@ -7,6 +7,28 @@ import 'token_store.dart';
 /// [unreachable]: a session is saved but the server could not be reached (offline or down).
 enum AuthStatus { loading, signedOut, signedIn, unreachable }
 
+class CodeRequestResult {
+  const CodeRequestResult({this.error, this.resendAfterSeconds = 30});
+
+  final ApiError? error;
+  final int resendAfterSeconds;
+}
+
+class VerifyResult {
+  const VerifyResult.signedIn()
+      : error = null,
+        signupToken = null;
+  const VerifyResult.needsName(String this.signupToken) : error = null;
+  const VerifyResult.failed(ApiError this.error) : signupToken = null;
+
+  final ApiError? error;
+
+  /// Set for a number without an account: pass it to [AuthController.completeSignup].
+  final String? signupToken;
+
+  bool get needsName => signupToken != null;
+}
+
 /// App-wide sign-in state. Screens call these methods and show the returned [ApiError], if any.
 class AuthController extends ChangeNotifier {
   AuthController({required this.api, required this.tokens}) {
@@ -46,23 +68,33 @@ class AuthController extends ChangeNotifier {
     await init();
   }
 
-  Future<ApiError?> login(String email, String password) async {
-    final result = await api.post('/auth/login', body: {'email': email.trim(), 'password': password}, auth: false);
-    return _completeAuth(result);
+  // ---- Sign in with a phone number: request a code, verify it, and (new numbers) give a name ----
+
+  /// Sends a sign-in code to [phone] (E.164). The server answers the same for known and unknown numbers.
+  Future<CodeRequestResult> requestCode(String phone) async {
+    final result = await api.post('/auth/phone/request', body: {'phone': phone}, auth: false);
+    if (result is ApiError) return CodeRequestResult(error: result);
+    final seconds = (result as ApiOk).json['resendAfterSeconds'];
+    return CodeRequestResult(resendAfterSeconds: seconds is int ? seconds : 30);
   }
 
-  Future<ApiError?> register({
-    required String fullName,
-    required String email,
-    required String password,
-    String? phone,
-  }) async {
-    final result = await api.post('/auth/register', auth: false, body: {
-      'fullName': fullName.trim(),
-      'email': email.trim(),
-      'password': password,
-      if (phone != null && phone.trim().isNotEmpty) 'phone': phone.replaceAll(RegExp(r'\s+'), ''),
-    });
+  /// A known number is signed in (the app switches screens); a new one needs [completeSignup] next.
+  Future<VerifyResult> verifyCode(String phone, String code) async {
+    final result = await api.post('/auth/phone/verify', body: {'phone': phone, 'code': code.trim()}, auth: false);
+    if (result is ApiError) return VerifyResult.failed(result);
+    final data = (result as ApiOk).json;
+    if (data['status'] == 'NEEDS_NAME') return VerifyResult.needsName(data['signupToken'] as String);
+    final error = await _completeAuth(result);
+    return error == null ? const VerifyResult.signedIn() : VerifyResult.failed(error);
+  }
+
+  /// Creates the account for a new number using the ticket from [verifyCode].
+  Future<ApiError?> completeSignup({required String signupToken, required String fullName}) async {
+    final result = await api.post(
+      '/auth/phone/signup',
+      body: {'signupToken': signupToken, 'fullName': fullName.trim()},
+      auth: false,
+    );
     return _completeAuth(result);
   }
 
