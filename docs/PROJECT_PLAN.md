@@ -55,7 +55,11 @@ These are the simplest reasonable defaults so Phases 4–6 can proceed; confirm 
 | 2026-10-03 | Dev emulators: `Rove_Pixel` (Pixel 8) and `Rove_Pixel_10`, Android 15 Google APIs image, one at a time | Stability on WHPX; see `docs/DEV_SETUP.md` |
 
 | 2026-10-03 | Phase 2 auth: opaque rotating refresh tokens (hashed in DB) + short-lived JWT access tokens; no Passport; argon2id via `@node-rs/argon2` | Fewer dependencies, reuse detection |
-| 2026-10-03 | Login = email + password for all roles; phone verified by mock OTP (open decision #1 resolved with default) | Simplest MVP |
+| 2026-10-03 | Login = email + password for all roles; phone verified by mock OTP (open decision #1 resolved with default) | Simplest MVP. **Superseded by the next three rows** |
+| 2026-10-03 | Customers sign in with **phone number + one-time code** (default and only customer method). Public registration removed; a new number creates the account after a name step, using a single-use signup ticket | Phone is the identity customers have; no passwords to forget or leak |
+| 2026-10-03 | Staff, city managers and admins keep **email + password**, on a separate `/login/staff` page (website only) | Staff accounts are created by admins and need a credential that works without a phone |
+| 2026-10-03 | Customer accounts need no email and no password; an optional email is deferred to Phase 8 (notifications). Customers get no password option for now | Fewer fields at sign-up; revisit if users ask for it |
+| 2026-10-03 | Sign-in code limits: 30 s resend cooldown, 5 sends per number per hour, 5 wrong attempts per code, daily cap on all sends (`OTP_DAILY_SEND_CAP`); the same response for known, unknown and staff numbers | Guards against SMS-pumping cost and account enumeration; rules live in `OtpService`, so a real provider (Phase 9) changes nothing here |
 | 2026-10-03 | Phase 2: only SUPER_ADMIN creates/manages staff; manager-creates-employee deferred to Phase 3 | Needs stations to resolve city ownership |
 | 2026-10-03 | `StaffAssignment` city/station ids have no FK until Phase 3 | Tables don't exist yet |
 | 2026-10-03 | Vitest uses a small TypeScript-compiler plugin for decorator metadata instead of SWC | SWC native binary blocked by Windows folder ACLs |

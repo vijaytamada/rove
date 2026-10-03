@@ -26,6 +26,7 @@ Each phase ends with a usable increment and a completion checklist. Don't start 
 - **Features:** register (customer), login, password hashing, JWT access + rotating refresh tokens, logout, `GET/PATCH /me`; roles; guards + decorators; scope model (city/station assignments); `OtpProvider` interface + mock (phone verification); super-admin seed; seed staff users.
 - **Modules:** `Auth`, `Users`, `Rbac` (guards/decorators), `Otp` provider (mock).
 - **Frontend:** login/register/profile pages, auth state, role-aware route guard.
+- **Change after Phase 3:** customer sign-in became phone + one-time code (new numbers add a name step), registration was removed, and staff keep email + password on a separate `/login/staff` page. See `docs/API.md` and the Decision Log.
 - **Depends on:** 1.
 - **Outcome:** Four roles can log in; protected endpoints enforce role + scope; e2e tests for auth and RBAC pass.
 
@@ -78,7 +79,7 @@ Each phase ends with a usable increment and a completion checklist. Don't start 
 
 ## Phase 9 — Real OTP & KYC
 - **Objective:** Replace mocks with compliant providers.
-- **Features:** vendor selection (decision gate); real OTP (expiry, retries, resend, rate limiting via Redis); real KYC/Aadhaar via third-party provider (redirect/SDK flow, status webhook), KYC states + retry/rejection; consent + audit records; no raw Aadhaar stored.
+- **Features:** vendor selection (decision gate); real SMS provider behind the already-built customer sign-in flow (the flow, expiry, retries, resend cooldown, send caps and Redis rate limits exist since the phone-login change; this phase only swaps the mock provider, and adds SMS auto-read in the Flutter app). **Start the India DLT sender/template registration early: it takes days to weeks.** real KYC/Aadhaar via third-party provider (redirect/SDK flow, status webhook), KYC states + retry/rejection; consent + audit records; no raw Aadhaar stored.
 - **Modules:** new provider implementations; `Kyc` expanded; `AuditLog`.
 - **Depends on:** stable MVP; legal/compliance review.
 - **Outcome:** Real customers can verify; flipping env var switches mock↔real; no business-code changes.
@@ -109,7 +110,7 @@ Each phase ends with a usable increment and a completion checklist. Don't start 
 ## Open decisions (resolve before the phase shown)
 | # | Question | Needed by | Proposed default |
 |---|---|---|---|
-| 1 | Customer login: password, phone+OTP, or both? | 2 | Email/phone + password; mock OTP verifies phone |
+| 1 | Customer login: password, phone+OTP, or both? | 2 | **Resolved:** customers use phone + OTP only; staff use email + password (mock OTP until Phase 9) |
 | 2 | Is Flutter in the MVP, or web only? | 1 | Scaffold only; build after Phase 6 |
 | 3 | Booking: hourly, daily, or both? Min/max duration? | 4 | Hourly with min 1h; daily = 24h plan |
 | 4 | Does a booking reserve a specific vehicle or a model at a station? | 4 | Specific vehicle |

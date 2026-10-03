@@ -28,8 +28,8 @@ Update this line whenever a phase completes.
 ## Repo layout
 `backend/` NestJS API · `frontend/` Next.js · `flutter/` mobile · `infra/` docker compose · `docs/` plan & design docs · `.ai-context/` this file.
 
-## In progress: phone + OTP login for customers
-Branch `feature/phone-otp-login` (backend done, website and Flutter app still to migrate). Read `docs/HANDOFF_PHONE_OTP.md` before continuing. `main` is the last fully working state.
+## Auth model: phone + OTP for customers, email + password for staff
+Customers sign in with phone number + one-time code (`/auth/phone/request|verify|signup`; a new number gets a name step and an account; mock code `123456` until Phase 9). Staff, city managers and admins sign in with email + password (`/auth/login`, website `/login/staff`). No public registration; customers need no email or password (optional email deferred to Phase 8). `User.email`/`passwordHash` are nullable with CHECKs (staff need both, customers need a phone). Code limits and Redis keys are documented in `modules/auth/otp.service.ts`; API in `docs/API.md`, decisions in `docs/PROJECT_PLAN.md`. Branch `feature/phone-otp-login` holds backend, website, Flutter app, QA scripts and docs; the remaining step is the full re-test and merge into `main`.
 
 ## UI direction
 **Modern, minimal, simple, clean.** The website is a responsive website (desktop top navigation + wide layouts; phones get a compact header and bottom tabs) used by customers, station employees, city managers and admins; staff/admin use a sidebar console. The Flutter app is a separate native **customer-only** app; station employees, city managers and admins use the website, and a separate staff app is planned for later (not now). Both share the backend API, the design tokens and the screen specs, but are not pixel copies. Neutral palette + one green accent, near-black primary buttons, lots of whitespace. Tailwind. Clients never compute money. Full guide: `docs/UI.md`.

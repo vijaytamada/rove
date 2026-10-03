@@ -13,7 +13,7 @@ PostgreSQL via Prisma. This lists expected entities and purpose only. Detailed c
 ## Entities
 | Entity | Phase | Purpose |
 |---|---|---|
-| **User** | 2 | Any account. `role` enum (`SUPER_ADMIN, CITY_MANAGER, STATION_EMPLOYEE, CUSTOMER`), email, phone, passwordHash, `phoneVerified`, `kycStatus`, outstanding flag |
+| **User** | 2 | Any account. `role` enum (`SUPER_ADMIN, CITY_MANAGER, STATION_EMPLOYEE, CUSTOMER`), email (staff), phone (customers), passwordHash (staff), `phoneVerified`, `kycStatus`, outstanding flag |
 | **RefreshToken** | 2 | Hashed refresh tokens, expiry, revoked/rotated |
 | **StaffAssignment** | 2/3 | Links staff user → `cityId` (managers) or `stationId` (employees); defines scope |
 | **OtpChallenge** | 2 (mock) / 9 | Hashed code/attempt state if not kept purely in Redis |
@@ -36,7 +36,7 @@ PostgreSQL via Prisma. This lists expected entities and purpose only. Detailed c
 | **DeviceMapping / LockEvent** | 12 | IoT device ↔ vehicle; lock/unlock commands and results |
 
 ## Phase 2 notes (implemented: User, RefreshToken, StaffAssignment)
-- `User`: email (unique, stored lowercase), optional unique phone (E.164), `passwordHash` (argon2id), `role`, `status`, `phoneVerifiedAt`. `kycStatus` and outstanding-balance fields are added in Phases 4/6.
+- `User`: email (unique, stored lowercase, nullable), unique phone (E.164, nullable), `passwordHash` (argon2id, nullable), `role`, `status`, `phoneVerifiedAt`. CHECK constraints: staff roles must have an email and password; customers must have a phone. Customers sign in with a phone code, so they need no email or password (an optional email is deferred to Phase 8). `kycStatus` and outstanding-balance fields are added in Phases 4/6.
 - `RefreshToken`: stores only the SHA-256 hash of an opaque random token; `revokedAt` marks rotated/revoked tokens (kept for reuse detection).
 - `StaffAssignment`: exactly one of `cityId` / `stationId` (DB CHECK). No foreign keys yet; Phase 3 adds them.
 - OTP challenges live in Redis (`otp:phone:<userId>`, TTL 5 min; `otp:cooldown:<userId>`, TTL 30 s), not in Postgres. The `OtpChallenge` table from the entity list is not needed.

@@ -16,17 +16,17 @@ Prerequisites: Docker infra running (`docs/DEV_SETUP.md`), backend and website r
 
 Notes
 - e2e tests create data prefixed `e2e-`/`E2E-` and delete it afterwards; seed data is never touched. Don't name manual test data with those prefixes (the cleanup would delete it).
-- `sweep.mjs` deliberately fails many logins, which locks the demo customer for 15 minutes. Clear it with `docker exec rove-redis sh -c "redis-cli --scan --pattern 'login:fail:*' | xargs -r redis-cli del"`.
+- `sweep.mjs` deliberately fails many logins, which locks a staff account for 15 minutes. Clear it with `docker exec rove-redis sh -c "redis-cli --scan --pattern 'login:fail:*' | xargs -r redis-cli del"`.
 - The QA scripts read seed credentials from the root `.env`.
 
 ## What is covered (state after Phase 3)
 | Area | Tests |
 |---|---|
-| Backend | 31 unit, 70 end-to-end (auth, tokens, OTP, RBAC and scope, cities/stations/models/vehicles, staff management, security headers, hostile input, login throttle, capacity races) |
-| Website | lint + production build; `pages.mjs`: 23 routes × 5 roles (anonymous, customer, employee, manager, admin) = 115 checks plus 11 content/scoping checks; interactive form flows in a browser (see below) |
-| Flutter | 36 unit and widget tests (API client token refresh, auth controller incl. offline, sign-in/register/profile/OTP screens, station browsing) |
+| Backend | 31 unit, 81 end-to-end (phone sign-in and sign-up, OTP limits, staff login, tokens, RBAC and scope, cities/stations/models/vehicles, staff management, security headers, hostile input, login throttle, capacity races) |
+| Website | lint + production build; `pages.mjs`: 23 routes × 5 roles (anonymous, customer, employee, manager, admin) = 120 checks (including `/login/staff` and the `/register` redirect) plus 11 content/scoping checks; interactive form flows in a browser (see below) |
+| Flutter | 42 unit and widget tests (API client token refresh, auth controller incl. offline, phone sign-in: code, wrong code, new-number name step, expired ticket, resend countdown, change number; profile/OTP screens, station browsing) |
 | API sweep | 70 checks: every route in the OpenAPI spec rejects anonymous (401) and wrong-role (403) calls; hostile/malformed input gives clean 4xx with no leaks; headers; CORS; JWT tampering; refresh-token misuse; login throttling |
-| Concurrency | 6 probes: station capacity (create and move), duplicate vehicle code, duplicate city, duplicate registration, parallel status/update, parallel refresh |
+| Concurrency | 6 probes: station capacity (create and move), duplicate vehicle code, duplicate city, parallel sign-ups for one new phone number (two tickets), parallel status/update, parallel refresh |
 | Database | Fresh database built from all migrations + seed run twice (idempotent); CHECK constraints; no leftover test rows |
 | On device | Android emulator (Pixel 8, Android 15): sign in, session survives app restart, stations and scooters, backend outage and recovery |
 

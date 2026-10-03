@@ -34,11 +34,11 @@ Order matters: **infra → backend → web → emulator → Flutter**.
 | **T3** web | `frontend/` | `npm run dev` | `http://localhost:3000` |
 | **T4** mobile | `flutter/` | `flutter emulators --launch Rove_Pixel`, wait for the home screen, then `flutter run -d <emulator-id>` | App on the emulator |
 
-**Seed users (once, after migrations):** `cd backend && npm run prisma:seed` creates a super admin and a demo customer. Their emails/passwords come from `SEED_*` in `.env` (defaults in `.env.example`: `admin@rove.local`, `customer@rove.local`). Safe to re-run. Cities, stations and staff seeds arrive in Phase 3.
+**Seed users (once, after migrations):** `cd backend && npm run prisma:seed` creates a super admin and a demo customer. The admin's email and password come from `SEED_ADMIN_*` in `.env` (default `admin@rove.local`). The demo customer has no email or password: they sign in with the phone number in `SEED_CUSTOMER_PHONE` (default `+919000000001`) and the mock code `123456`. Safe to re-run. Cities, stations and staff seeds arrive in Phase 3.
 
 `npm run prisma:seed` also creates 2 cities (Bengaluru, Hyderabad), 5 stations, 3 vehicle models and 12 scooters, a city manager per city (`manager.blr@rove.local`, `manager.hyd@rove.local`) and a station employee per station (`employee.indiranagar@rove.local`, `employee.koramangala@rove.local`, `employee.mg-road@rove.local`, `employee.hitech-city@rove.local`, `employee.banjara-hills@rove.local`). Staff share the password in `SEED_STAFF_PASSWORD`.
 
-Sign in with the seeded accounts on the website (http://localhost:3000/login) and in the Flutter app.
+Customers sign in with their phone number and a code, on the website (http://localhost:3000/login) and in the Flutter app; a new number creates an account after asking for a name. Staff, city managers and admins sign in with email and password at http://localhost:3000/login/staff (the website only; the Flutter app is customer-only).
 
 Mock OTP: verification codes are always `123456` and are logged by the backend. Never enabled in production (the app refuses to start with `OTP_PROVIDER=mock` when `NODE_ENV=production`).
 
