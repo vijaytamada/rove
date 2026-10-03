@@ -8,7 +8,7 @@ export default function AuthLayout({ children }: { children: ReactNode }) {
     <div className="min-h-dvh bg-bg lg:grid lg:grid-cols-2">
       <aside className="hidden flex-col justify-between bg-ink p-12 text-white lg:flex">
         <Link href="/" aria-label="Home">
-          <Wordmark className="text-2xl" />
+          <Wordmark className="text-xl" />
         </Link>
         <div className="max-w-md">
           <h2 className="text-4xl font-semibold leading-tight tracking-tight">
@@ -23,7 +23,7 @@ export default function AuthLayout({ children }: { children: ReactNode }) {
 
       <div className="flex min-h-dvh flex-col px-5 py-8 sm:px-10 lg:min-h-0 lg:justify-center lg:px-16">
         <Link href="/" aria-label="Home" className="lg:hidden">
-          <Wordmark className="text-2xl" />
+          <Wordmark className="text-lg" />
         </Link>
         <div className="mx-auto flex w-full max-w-md flex-1 flex-col justify-center py-10 lg:flex-none lg:py-0">
           {children}

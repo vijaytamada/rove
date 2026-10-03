@@ -63,7 +63,7 @@ export async function phoneLogin(prev: PhoneLoginState, form: FormData): Promise
     const res = await apiRequest<CodeSent>("/auth/phone/request", { body: { phone } });
     if (!res.ok) {
       if (res.code === "VALIDATION_ERROR") {
-        return { step: "phone", fieldErrors: { phone: "Enter a valid mobile number, e.g. 98765 43210." }, values: { phone: typed } };
+        return { step: "phone", fieldErrors: { phone: "Enter your 10-digit mobile number." }, values: { phone: typed } };
       }
       return { ...keep, error: res.message, values: { phone: typed } };
     }

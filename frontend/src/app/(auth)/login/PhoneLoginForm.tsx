@@ -7,31 +7,26 @@ import { SubmitButton } from "@/components/app/SubmitButton";
 import { TextField } from "@/components/app/TextField";
 import { formatPhone } from "@/lib/phone";
 
-const HEADINGS = {
-  phone: { title: "Sign in or sign up", body: "Enter your mobile number and we'll text you a code. No password needed." },
-  code: { title: "Enter the code", body: "" },
-  name: { title: "Almost there", body: "You're new here. What should we call you?" },
-} as const;
+const TITLES = { phone: "Let's get you riding", code: "Enter the code", name: "What's your name?" } as const;
 
 /** Customer sign-in: phone number -> 6-digit code -> name (only for a number we haven't seen before). */
 export function PhoneLoginForm({ next, devHint }: { next: string; devHint: boolean }) {
   const [state, action, pending] = useActionState<PhoneLoginState, FormData>(phoneLogin, {});
   const formRef = useRef<HTMLFormElement>(null);
   const step = state.step ?? "phone";
-  const heading = HEADINGS[step];
 
   return (
     <>
-      <h1 className="text-3xl font-semibold tracking-tight">{heading.title}</h1>
-      <p className="mt-2 text-ink-muted">
-        {step === "code" ? `We sent a 6-digit code to ${formatPhone(state.phone ?? "")}.` : heading.body}
-      </p>
+      <h1 className="text-3xl font-semibold tracking-tight">{TITLES[step]}</h1>
+      {step === "code" && (
+        <p className="mt-2 text-ink-muted">We sent a 6-digit code to {formatPhone(state.phone ?? "")}.</p>
+      )}
 
       <form ref={formRef} action={action} className="mt-8 space-y-4" noValidate>
         <input type="hidden" name="next" value={next} />
         <FormMessage state={state} />
 
-        {step === "phone" && <PhoneStep state={state} devHint={devHint} />}
+        {step === "phone" && <PhoneStep state={state} />}
         {step === "code" && (
           <CodeStep
             state={state}
@@ -46,24 +41,53 @@ export function PhoneLoginForm({ next, devHint }: { next: string; devHint: boole
   );
 }
 
-function PhoneStep({ state, devHint }: { state: PhoneLoginState; devHint: boolean }) {
+/** Keeps only digits, drops a pasted +91 / 0 prefix and caps at 10 digits. */
+function tenDigits(value: string) {
+  let digits = value.replace(/\D/g, "");
+  if (digits.length > 10 && digits.startsWith("91")) digits = digits.slice(2);
+  if (digits.length > 10 && digits.startsWith("0")) digits = digits.slice(1);
+  return digits.slice(0, 10);
+}
+
+function PhoneStep({ state }: { state: PhoneLoginState }) {
+  const error = state.fieldErrors?.phone;
   return (
     <>
-      <TextField
-        label="Mobile number"
-        name="phone"
-        type="tel"
-        inputMode="tel"
-        autoComplete="tel"
-        placeholder="98765 43210"
-        hint="Indian numbers don't need +91. For another country, start with + and the country code."
-        defaultValue={state.values?.phone}
-        error={state.fieldErrors?.phone}
-        autoFocus
-        required
-      />
-      {devHint && <p className="text-sm text-ink-muted">Development mode: the code is always 123456.</p>}
-      <SubmitButton>Send code</SubmitButton>
+      <div>
+        <label htmlFor="phone" className="mb-1.5 block text-sm font-medium">
+          Mobile number
+        </label>
+        <div
+          className={`flex h-12 items-center rounded-control border bg-surface transition-colors focus-within:border-ink ${
+            error ? "border-danger" : "border-line"
+          }`}
+        >
+          <span className="select-none pl-4 pr-2 text-base text-ink-muted">+91</span>
+          <input
+            id="phone"
+            name="phone"
+            type="tel"
+            inputMode="numeric"
+            autoComplete="tel-national"
+            placeholder="98765 43210"
+            defaultValue={state.values?.phone}
+            onInput={(e) => {
+              e.currentTarget.value = tenDigits(e.currentTarget.value);
+            }}
+            aria-invalid={error ? true : undefined}
+            aria-describedby={error ? "phone-error" : undefined}
+            className="h-full min-w-0 flex-1 bg-transparent pr-4 text-base outline-none placeholder:text-ink-faint"
+            autoFocus
+            required
+          />
+        </div>
+        {error && (
+          <p id="phone-error" className="mt-1.5 text-sm text-danger">
+            {error}
+          </p>
+        )}
+      </div>
+      <SubmitButton>Continue</SubmitButton>
     </>
   );
 }

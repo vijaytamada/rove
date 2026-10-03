@@ -25,7 +25,7 @@ Finder field(String label) => find.descendant(
 /// Types a number and the code (the form submits at 6 digits).
 Future<void> signInThroughForm(WidgetTester tester) async {
   await tester.enterText(field('Mobile number'), '98765 43210');
-  await tester.tap(find.widgetWithText(FilledButton, 'Send code'));
+  await tester.tap(find.widgetWithText(FilledButton, 'Continue'));
   await tester.pumpAndSettle();
   await tester.enterText(field('Code'), '123456');
   await tester.pumpAndSettle();
@@ -43,12 +43,13 @@ void main() {
     final env = TestEnv((r) async => json(500, {}));
     await pumpApp(tester, env);
 
-    expect(find.text('Sign in or sign up'), findsOneWidget);
+    expect(find.text("Let's get you riding"), findsOneWidget);
+    expect(find.text('+91'), findsOneWidget);
     await tester.enterText(field('Mobile number'), '12345');
-    await tester.tap(find.widgetWithText(FilledButton, 'Send code'));
+    await tester.tap(find.widgetWithText(FilledButton, 'Continue'));
     await tester.pumpAndSettle();
 
-    expect(find.text('Enter a valid mobile number, e.g. 98765 43210'), findsOneWidget);
+    expect(find.text('Enter your 10-digit mobile number'), findsOneWidget);
     expect(env.requests, isEmpty);
   });
 
@@ -57,7 +58,7 @@ void main() {
     await pumpApp(tester, env);
 
     await tester.enterText(field('Mobile number'), '98765 43210');
-    await tester.tap(find.widgetWithText(FilledButton, 'Send code'));
+    await tester.tap(find.widgetWithText(FilledButton, 'Continue'));
     await tester.pumpAndSettle();
 
     expect(env.to('/auth/phone/request').single.body, contains('"phone":"+919876543210"'));
@@ -99,7 +100,7 @@ void main() {
     await pumpApp(tester, env);
 
     await signInThroughForm(tester);
-    expect(find.text('Almost there'), findsOneWidget);
+    expect(find.text("What's your name?"), findsOneWidget);
     expect(env.auth.status, AuthStatus.signedOut);
 
     await tester.tap(find.widgetWithText(FilledButton, 'Create account'));
@@ -129,7 +130,7 @@ void main() {
     await tester.tap(find.widgetWithText(FilledButton, 'Create account'));
     await tester.pumpAndSettle();
 
-    expect(find.text('Sign in or sign up'), findsOneWidget);
+    expect(find.text("Let's get you riding"), findsOneWidget);
     expect(find.textContaining('has expired'), findsOneWidget);
   });
 
@@ -140,11 +141,11 @@ void main() {
     await pumpApp(tester, env);
 
     await tester.enterText(field('Mobile number'), '9876543210');
-    await tester.tap(find.widgetWithText(FilledButton, 'Send code'));
+    await tester.tap(find.widgetWithText(FilledButton, 'Continue'));
     await tester.pumpAndSettle();
 
     expect(find.textContaining('Too many codes requested'), findsOneWidget);
-    expect(find.text('Sign in or sign up'), findsOneWidget); // still on the phone step
+    expect(find.text("Let's get you riding"), findsOneWidget); // still on the phone step
   });
 
   testWidgets('resend is locked during the countdown, then sends another code', (tester) async {
@@ -152,7 +153,7 @@ void main() {
     await pumpApp(tester, env);
 
     await tester.enterText(field('Mobile number'), '9876543210');
-    await tester.tap(find.widgetWithText(FilledButton, 'Send code'));
+    await tester.tap(find.widgetWithText(FilledButton, 'Continue'));
     await tester.pump();
     await tester.pump();
     expect(find.text('Resend code in 30s'), findsOneWidget);
@@ -175,12 +176,12 @@ void main() {
     await pumpApp(tester, env);
 
     await tester.enterText(field('Mobile number'), '9876543210');
-    await tester.tap(find.widgetWithText(FilledButton, 'Send code'));
+    await tester.tap(find.widgetWithText(FilledButton, 'Continue'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Change number'));
     await tester.pumpAndSettle();
 
-    expect(find.text('Sign in or sign up'), findsOneWidget);
+    expect(find.text("Let's get you riding"), findsOneWidget);
     expect(find.text('Enter the code'), findsNothing);
   });
 
@@ -193,7 +194,7 @@ void main() {
     await pumpApp(tester, env);
 
     expect(find.textContaining("Can't reach Rove"), findsOneWidget);
-    expect(find.text('Sign in or sign up'), findsNothing);
+    expect(find.text("Let's get you riding"), findsNothing);
 
     down = false;
     await tester.tap(find.text('Try again'));
@@ -236,7 +237,7 @@ void main() {
     await tester.scrollUntilVisible(find.text('Sign out'), 200, scrollable: find.byType(Scrollable).first);
     await tester.tap(find.text('Sign out'));
     await tester.pumpAndSettle();
-    expect(find.text('Sign in or sign up'), findsOneWidget);
+    expect(find.text("Let's get you riding"), findsOneWidget);
     expect(env.auth.status, AuthStatus.signedOut);
   });
 }

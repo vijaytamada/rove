@@ -45,7 +45,7 @@ Future<void> openStations(WidgetTester tester, TestEnv env) async {
   await tester.pumpWidget(RoveApp(auth: env.auth));
   await tester.pumpAndSettle();
   await tester.enterText(find.byType(TextFormField), '9876543210');
-  await tester.tap(find.widgetWithText(FilledButton, 'Send code'));
+  await tester.tap(find.widgetWithText(FilledButton, 'Continue'));
   await tester.pumpAndSettle();
   await tester.enterText(find.byType(TextFormField), '123456'); // submits at 6 digits
   await tester.pumpAndSettle();

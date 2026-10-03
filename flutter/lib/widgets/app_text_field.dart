@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../theme/tokens.dart';
+
 /// Label above the field (matches the website), with an inline error and optional hint.
 class AppTextField extends StatelessWidget {
   const AppTextField({
@@ -20,6 +22,7 @@ class AppTextField extends StatelessWidget {
     this.onChanged,
     this.inputFormatters,
     this.autofocus = false,
+    this.prefix,
   });
 
   final String label;
@@ -37,6 +40,9 @@ class AppTextField extends StatelessWidget {
   final ValueChanged<String>? onChanged;
   final List<TextInputFormatter>? inputFormatters;
   final bool autofocus;
+
+  /// Always-visible text before the input (e.g. a country code).
+  final String? prefix;
 
   @override
   Widget build(BuildContext context) {
@@ -61,6 +67,13 @@ class AppTextField extends StatelessWidget {
             hintText: hint,
             helperText: helper,
             helperMaxLines: 2,
+            prefixIcon: prefix == null
+                ? null
+                : Padding(
+                    padding: const EdgeInsets.only(left: 16, right: 8),
+                    child: Text(prefix!, style: const TextStyle(fontSize: 16, color: Tokens.inkMuted)),
+                  ),
+            prefixIconConstraints: const BoxConstraints(minWidth: 0, minHeight: 0),
             errorText: errorText,
             errorMaxLines: 3,
             counterText: '',

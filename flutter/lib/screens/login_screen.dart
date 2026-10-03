@@ -68,7 +68,7 @@ class _LoginScreenState extends State<LoginScreen> {
     if (!isValidPhone(phone)) {
       setState(() {
         _error = null;
-        _fieldError = 'Enter a valid mobile number, e.g. 98765 43210';
+        _fieldError = 'Enter your 10-digit mobile number';
       });
       return;
     }
@@ -162,9 +162,9 @@ class _LoginScreenState extends State<LoginScreen> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final (title, subtitle) = switch (_step) {
-      _Step.phone => ('Sign in or sign up', "Enter your mobile number and we'll text you a code. No password needed."),
+      _Step.phone => ("Let's get you riding", null),
       _Step.code => ('Enter the code', 'We sent a 6-digit code to ${formatPhone(_e164)}.'),
-      _Step.name => ('Almost there', "You're new here. What should we call you?"),
+      _Step.name => ("What's your name?", null),
     };
 
     return PopScope(
@@ -183,11 +183,13 @@ class _LoginScreenState extends State<LoginScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    const Wordmark(size: 28),
+                    const Wordmark(size: 20),
                     const SizedBox(height: 32),
                     Text(title, style: theme.textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w600)),
-                    const SizedBox(height: 4),
-                    Text(subtitle, style: const TextStyle(color: Tokens.inkMuted)),
+                    if (subtitle != null) ...[
+                      const SizedBox(height: 4),
+                      Text(subtitle, style: const TextStyle(color: Tokens.inkMuted)),
+                    ],
                     const SizedBox(height: 28),
                     if (_error != null) ...[FormBanner.error(_error!), const SizedBox(height: 16)],
                     ...switch (_step) {
@@ -210,17 +212,17 @@ class _LoginScreenState extends State<LoginScreen> {
           label: 'Mobile number',
           controller: _phone,
           hint: '98765 43210',
-          helper: "Indian numbers don't need +91. For another country, start with + and the country code.",
-          keyboardType: TextInputType.phone,
+          prefix: '+91',
+          inputFormatters: const [TenDigitFormatter()],
+          keyboardType: TextInputType.number,
           autofillHints: const [AutofillHints.telephoneNumber],
           textInputAction: TextInputAction.done,
           autofocus: true,
           errorText: _fieldError,
           onSubmitted: (_) => _sendCode(),
         ),
-        ..._devHint(),
         const SizedBox(height: 24),
-        PrimaryButton(label: 'Send code', onPressed: _sendCode, loading: _loading),
+        PrimaryButton(label: 'Continue', onPressed: _sendCode, loading: _loading),
       ];
 
   List<Widget> _codeStep() => [

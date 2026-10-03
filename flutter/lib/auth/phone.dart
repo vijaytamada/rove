@@ -1,3 +1,5 @@
+import 'package:flutter/services.dart';
+
 final _e164 = RegExp(r'^\+[1-9]\d{7,14}$');
 
 /// Turns what a person types into the strict E.164 form the API expects (`+919876543210`).
@@ -19,4 +21,19 @@ bool isValidPhone(String normalized) => _e164.hasMatch(normalized);
 String formatPhone(String phone) {
   final m = RegExp(r'^\+91(\d{5})(\d{5})$').firstMatch(phone);
   return m == null ? phone : '+91 ${m[1]} ${m[2]}';
+}
+
+/// For the 10-digit field that sits after a fixed "+91": keeps digits only, drops a pasted
+/// "+91" / "0" prefix and caps the length at 10.
+class TenDigitFormatter extends TextInputFormatter {
+  const TenDigitFormatter();
+
+  @override
+  TextEditingValue formatEditUpdate(TextEditingValue oldValue, TextEditingValue newValue) {
+    var digits = newValue.text.replaceAll(RegExp(r'\D'), '');
+    if (digits.length > 10 && digits.startsWith('91')) digits = digits.substring(2);
+    if (digits.length > 10 && digits.startsWith('0')) digits = digits.substring(1);
+    if (digits.length > 10) digits = digits.substring(0, 10);
+    return TextEditingValue(text: digits, selection: TextSelection.collapsed(offset: digits.length));
+  }
 }

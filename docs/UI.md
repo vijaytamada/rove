@@ -76,7 +76,7 @@ Web: Tailwind + **shadcn/ui** (Radix) customized to the tokens above. Flutter: M
 | Toast | `sonner` | `SnackBar` |
 
 ## 6. Customer screens (MVP)
-1. Sign in (phone + code). One screen with three steps, no separate "create account": **phone** (Indian numbers need no +91; other countries start with `+`) -> **code** (6 digits, submits by itself at the sixth, one-time-code autofill, resend countdown, "Change number") -> **name**, only for a number we haven't seen (this creates the account). Development builds show "the code is always 123456". The website adds a "Staff sign in" link to `/login/staff` (email + password, for station employees, managers and admins); `/register` redirects to `/login`. The Flutter app is customer-only, so it has no staff sign-in
+1. Sign in (phone + code). One screen with three steps, no separate "create account": **phone** (fixed `+91` prefix, then 10 digits; India only for now) -> **code** (6 digits, submits by itself at the sixth, one-time-code autofill, resend countdown, "Change number") -> **name**, only for a number we haven't seen (this creates the account). Development builds show "the code is always 123456". The website adds a "Staff sign in" link to `/login/staff` (email + password, for station employees, managers and admins); `/register` redirects to `/login`. The Flutter app is customer-only, so it has no staff sign-in
 2. Home: city/station selector, scooters at the station, active-rental card
 3. Stations list → station detail
 4. Scooter list (photo, model, battery, range, price/hr, availability)
