@@ -16,6 +16,8 @@ export interface TokenPair {
 }
 
 const sha256 = (value: string) => createHash('sha256').update(value).digest('hex');
+/** A just-rotated token presented again within this window is treated as a parallel request, not a replay. */
+const REUSE_GRACE_MS = 10_000;
 const invalidRefresh = () =>
   new AppException(401, 'INVALID_REFRESH_TOKEN', 'Your session has expired. Sign in again.');
 
@@ -38,8 +40,9 @@ export class TokensService {
 
   /**
    * Rotates a refresh token: the presented token is revoked and a new pair is issued.
-   * Presenting an already-revoked token means it leaked or was replayed, so every session
-   * of that user is revoked.
+   * Presenting an already-revoked token long after rotation means it leaked or was replayed,
+   * so every session of that user is revoked. Within REUSE_GRACE_MS it is just rejected, since
+   * parallel requests from one browser can legitimately present the same token.
    */
   async rotate(presented: string): Promise<{ user: User; tokens: TokenPair }> {
     const row = await this.prisma.refreshToken.findUnique({
@@ -49,20 +52,18 @@ export class TokensService {
     if (!row) throw invalidRefresh();
 
     if (row.revokedAt) {
-      await this.revokeAll(row.userId);
+      if (Date.now() - row.revokedAt.getTime() > REUSE_GRACE_MS) await this.revokeAll(row.userId);
       throw invalidRefresh();
     }
     if (row.expiresAt <= new Date() || row.user.status !== 'ACTIVE') throw invalidRefresh();
 
-    // Atomic claim: only one concurrent request can revoke this token.
+    // Atomic claim: only one concurrent request can revoke this token. The loser is a parallel
+    // request, not a replay, so it is rejected without revoking the winner's new session.
     const claimed = await this.prisma.refreshToken.updateMany({
       where: { id: row.id, revokedAt: null },
       data: { revokedAt: new Date() },
     });
-    if (claimed.count === 0) {
-      await this.revokeAll(row.userId);
-      throw invalidRefresh();
-    }
+    if (claimed.count === 0) throw invalidRefresh();
     return { user: row.user, tokens: await this.issue(row.user) };
   }
 

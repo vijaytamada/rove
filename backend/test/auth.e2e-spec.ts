@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { createTestApp, TEST_PASSWORD, type TestApp } from './helpers.js';
 
 describe('Auth (e2e)', () => {
@@ -75,17 +76,38 @@ describe('Auth (e2e)', () => {
   });
 
   describe('refresh tokens', () => {
-    it('rotates tokens and detects reuse of an old refresh token', async () => {
+    const sha256 = (v: string) => createHash('sha256').update(v).digest('hex');
+
+    it('rotates tokens', async () => {
       const u = await t.createUser('CUSTOMER');
       const first = await t.login(u.email);
-
       const rotated = await t.http().post('/api/v1/auth/refresh').send({ refreshToken: first.refreshToken }).expect(200);
       expect(rotated.body.refreshToken).not.toBe(first.refreshToken);
       await t.http().get('/api/v1/me').set('Authorization', `Bearer ${rotated.body.accessToken}`).expect(200);
+    });
 
-      // Replaying the old token fails and revokes the whole family.
+    it('rejects a just-rotated token (parallel request) without revoking the new session', async () => {
+      const u = await t.createUser('CUSTOMER');
+      const first = await t.login(u.email);
+      const rotated = await t.http().post('/api/v1/auth/refresh').send({ refreshToken: first.refreshToken }).expect(200);
+
       const replay = await t.http().post('/api/v1/auth/refresh').send({ refreshToken: first.refreshToken }).expect(401);
       expect(replay.body.code).toBe('INVALID_REFRESH_TOKEN');
+      // The new token still works.
+      await t.http().post('/api/v1/auth/refresh').send({ refreshToken: rotated.body.refreshToken }).expect(200);
+    });
+
+    it('detects later reuse of an old refresh token and revokes all sessions', async () => {
+      const u = await t.createUser('CUSTOMER');
+      const first = await t.login(u.email);
+      const rotated = await t.http().post('/api/v1/auth/refresh').send({ refreshToken: first.refreshToken }).expect(200);
+      // Pretend the rotation happened a minute ago.
+      await t.prisma.refreshToken.update({
+        where: { tokenHash: sha256(first.refreshToken) },
+        data: { revokedAt: new Date(Date.now() - 60_000) },
+      });
+
+      await t.http().post('/api/v1/auth/refresh').send({ refreshToken: first.refreshToken }).expect(401);
       await t.http().post('/api/v1/auth/refresh').send({ refreshToken: rotated.body.refreshToken }).expect(401);
     });
 

@@ -12,6 +12,7 @@ Each phase ends with a usable increment and a completion checklist. Don't start 
 ---
 
 ## Phase 1 — Project Foundation
+**Status: complete.**
 - **Objective:** Runnable skeleton of every app + local infra.
 - **Features:** repo skeleton; NestJS app with config validation, health endpoint, Swagger at `/api/docs`; Prisma + initial migration (empty/minimal); Postgres + Redis via Docker Compose; Next.js app (landing + health check calling backend); Flutter project created (hello world); `.env.example`; lint/format; CI-less README quick-start.
 - **Backend modules:** `Config`, `Prisma`, `Redis`, `Health`.
@@ -20,6 +21,7 @@ Each phase ends with a usable increment and a completion checklist. Don't start 
 - **Outcome / done when:** `docker compose up` starts Postgres+Redis; backend boots, `/api/v1/health` OK, Swagger loads; frontend loads and shows backend health; docs quick-start verified from scratch.
 
 ## Phase 2 — Authentication & RBAC
+**Status: complete.** Backend: 21 unit + 31 e2e tests. Web: login, register, profile (with mock phone verification), role-aware routes. Decisions and API details: `docs/API.md`, `docs/RBAC.md`, `docs/PROJECT_PLAN.md` (Decision Log). Deferred to Phase 3: city managers creating employees in their cities, FKs on assignments, staff seed data.
 - **Objective:** Identity and permissions foundation.
 - **Features:** register (customer), login, password hashing, JWT access + rotating refresh tokens, logout, `GET/PATCH /me`; roles; guards + decorators; scope model (city/station assignments); `OtpProvider` interface + mock (phone verification); super-admin seed; seed staff users.
 - **Modules:** `Auth`, `Users`, `Rbac` (guards/decorators), `Otp` provider (mock).
