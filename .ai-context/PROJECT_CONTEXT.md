@@ -25,6 +25,9 @@ Update this line whenever a phase completes.
 - Mobile: Flutter/Dart (customer app comes after the web MVP flow works)
 - Infra: Docker Compose · Docs: Swagger/OpenAPI · Auth: JWT (access + refresh)
 
+## Current state (update at the end of every task)
+Phases 1-3 complete (foundation, auth + roles, cities/stations/vehicle models/fleet, admin console, customer app station browsing) plus phone + OTP sign-in for customers (backend, website, Flutter, QA scripts, docs). Sign-in screens were simplified: title "Let's get you riding", fixed `+91` prefix + 10 digits (India only for now), button "Continue". Tests at last full run: backend 31 unit + 81 e2e, Flutter 42, QA `sweep` 70/70, `pages` 120 + content checks, `race` 6/6, website lint + build clean. Branches: `main` (tested) and `dev` (work); no git remote yet. **Next:** Phase 4 (booking, pricing quote, payment mock, KYC gate). Open items: add a git remote when the user provides one; optional non-India phone numbers; real SMS provider and India DLT registration (Phase 9).
+
 ## Repo layout
 `backend/` NestJS API · `frontend/` Next.js · `flutter/` mobile · `infra/` docker compose · `docs/` plan & design docs · `.ai-context/` this file.
 
@@ -43,7 +46,8 @@ Two long-lived branches only: `main` (last fully tested, releasable state) and `
 3. Keep changes focused on the current phase; don't touch unrelated modules.
 4. Small, testable increments. Add tests for business logic (pricing engine especially).
 5. Do not add a dependency unless it is actually needed now.
-6. Update docs when an architectural/product decision changes (and log it in `docs/PROJECT_PLAN.md` → Decision Log).
+6. **Keep the docs current with every piece of work, in the same commit as the code, so no information is lost between sessions.** Update whatever the change touches: this file (current state, auth model, branches), `docs/PHASES.md` (status), `docs/API.md` (endpoints, error codes), `docs/DATABASE.md`, `docs/RBAC.md`, `docs/UI.md`, `docs/ARCHITECTURE.md`, `docs/DEV_SETUP.md`, `docs/TESTING.md` (test counts, new findings, known limitations), the READMEs, and add every product/architecture decision to `docs/PROJECT_PLAN.md` → Decision Log. Before finishing a task, check these for stale statements (search for the old behaviour), not just the file you expected.
+   Keep a one-paragraph "Current state" below up to date: what works, what is in progress, what is next.
 7. If a requirement is ambiguous, state the ambiguity and pick the simplest reasonable option; record it in the Decision Log.
 8. Keep it simple: no microservices, no CQRS/event-sourcing, no premature optimization.
 
