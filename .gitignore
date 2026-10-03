@@ -34,3 +34,6 @@ Thumbs.db
 
 # Prisma generated client
 backend/src/generated/
+
+# TypeScript incremental build info
+*.tsbuildinfo
