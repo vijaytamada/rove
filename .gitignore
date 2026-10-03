@@ -1,0 +1,36 @@
+# Env / secrets
+.env
+.env.*
+!.env.example
+
+# Node
+node_modules/
+dist/
+build/
+.next/
+out/
+coverage/
+*.log
+npm-debug.log*
+
+# Prisma
+backend/prisma/*.db
+
+# Flutter / Dart
+flutter/.dart_tool/
+flutter/build/
+flutter/.flutter-plugins*
+flutter/.packages
+
+# Docker volumes
+infra/data/
+
+# OS / IDE
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/*
+!.vscode/extensions.json
+
+# Prisma generated client
+backend/src/generated/

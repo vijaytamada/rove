@@ -1,0 +1,20 @@
+/* Design tokens — single source of truth for the web app. Mirror in flutter/lib/theme/tokens.dart.
+   See docs/UI.md §3. */
+:root {
+  --ink: #0b0b0f;
+  --ink-muted: #6b7280;
+  --ink-faint: #9ca3af;
+  --bg: #fafafa;
+  --canvas: #f1f1f3;
+  --surface: #ffffff;
+  --line: #eeeef0;
+  --accent: #10b981;
+  --accent-soft: #ecfdf5;
+  --accent-ink: #047857;
+  --warning: #f59e0b;
+  --danger: #ef4444;
+  --info: #3b82f6;
+
+  --radius-card: 16px;
+  --radius-control: 12px;
+}

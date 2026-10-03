@@ -1,0 +1,38 @@
+name: rove
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: rove-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-rove}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-rove}
+      POSTGRES_DB: ${POSTGRES_DB:-rove}
+    ports:
+      - "${POSTGRES_PORT:-5442}:5432"
+    volumes:
+      - rove_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-rove} -d ${POSTGRES_DB:-rove}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    container_name: rove-redis
+    restart: unless-stopped
+    ports:
+      - "${REDIS_PORT:-6389}:6379"
+    volumes:
+      - rove_redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  rove_pgdata:
+  rove_redisdata:

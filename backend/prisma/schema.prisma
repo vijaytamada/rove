@@ -1,0 +1,12 @@
+// Phase 1: no domain models yet. Phase 2 adds User, RefreshToken, StaffAssignment.
+// See docs/DATABASE.md for the planned entities.
+
+generator client {
+  provider     = "prisma-client"
+  output       = "../src/generated/prisma"
+  moduleFormat = "esm"
+}
+
+datasource db {
+  provider = "postgresql"
+}
