@@ -27,18 +27,25 @@ export default async function Home() {
           {user
             ? consoleHref
               ? "Your console is ready."
-              : "Scooter browsing and booking arrive in a later phase."
+              : "Browse stations and see which scooters are available. Booking arrives in a later phase."
             : "Pick up at a station near you, ride, and drop it off at any station in your city. Simple pricing and a refundable deposit."}
         </p>
 
         <div className="mt-8 flex max-w-md flex-col gap-3 sm:flex-row">
           {user ? (
-            consoleHref && <ButtonLink href={consoleHref}>Open your console</ButtonLink>
+            <>
+              <ButtonLink href="/stations">Browse stations</ButtonLink>
+              {consoleHref && (
+                <ButtonLink href={consoleHref} variant="secondary">
+                  Open your console
+                </ButtonLink>
+              )}
+            </>
           ) : (
             <>
-              <ButtonLink href="/register">Create account</ButtonLink>
-              <ButtonLink href="/login" variant="secondary">
-                Sign in
+              <ButtonLink href="/stations">Browse stations</ButtonLink>
+              <ButtonLink href="/register" variant="secondary">
+                Create account
               </ButtonLink>
             </>
           )}

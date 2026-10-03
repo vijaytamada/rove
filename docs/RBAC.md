@@ -22,7 +22,8 @@ A user has exactly one role. Role is in the JWT; **scope is loaded from DB (cach
 - `ScopeService.getScope(user)` reads `StaffAssignment` from the DB on every check. `assertCityAccess(user, cityId)` and `assertStationAccess(user, { stationId, cityId })` throw `FORBIDDEN_SCOPE`. Phase 3 services call these with the station's city resolved from the DB.
 - Access tokens carry only `sub` and `role` (role changes take effect when the access token expires, ≤ 15 min). Disabling a user revokes refresh tokens immediately; an already-issued access token stays valid until it expires.
 - `StaffAssignment.cityId/stationId` are plain UUID columns until Phase 3 adds the City/Station tables and foreign keys. A DB CHECK enforces exactly one of the two per row. CITY_MANAGER rows must be cities, STATION_EMPLOYEE rows must be stations.
-- In Phase 2 only SUPER_ADMIN manages users. City managers creating employees for their own cities arrives in Phase 3 (needs stations to resolve city ownership).
+- Phase 3: city managers create and manage station employees. A manager can manage an employee only if every station the employee is assigned to is in the manager's cities, and can only assign stations in their own cities. Managers cannot create or edit managers or admins.
+- `ScopeService.assertStationIdAccess(user, stationId)` loads the station (404) and checks scope; `stationFilter(user)` gives the Prisma filter for list endpoints.
 
 ## Permission matrix (✓ = allowed within scope)
 | Capability | Super Admin | City Manager | Station Employee | Customer |
@@ -30,10 +31,11 @@ A user has exactly one role. Role is in the JWT; **scope is loaded from DB (cach
 | Browse cities/stations/available vehicles | ✓ | ✓ | ✓ | ✓ (public) |
 | Manage cities | ✓ | — | — | — |
 | Manage stations | ✓ | ✓ (own cities) | — | — |
-| Manage vehicle models / pricing plans | ✓ | ✓ (own cities, plans) | — | — |
+| Manage vehicle models (global catalogue) | ✓ | read only | read only | — |
+| Manage pricing plans (Phase 4) | ✓ | ✓ (own cities) | — | — |
 | Manage vehicles (create/status) | ✓ | ✓ (own cities) | status→MAINTENANCE only (own station) | — |
 | Create managers | ✓ | — | — | — |
-| Create station employees | ✓ | ✓ (own cities) | — | — |
+| Create station employees | ✓ | ✓ (stations in own cities) | — | — |
 | Register / edit own profile | ✓ | ✓ | ✓ | ✓ |
 | Create booking / pay / cancel own | — | — | — | ✓ |
 | View bookings | all | own cities | own stations | own |

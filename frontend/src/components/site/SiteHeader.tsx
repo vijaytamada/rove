@@ -28,6 +28,7 @@ export function SiteHeader({ user }: { user: UserView | null }) {
             <NavLink href="/" exact>
               Home
             </NavLink>
+            <NavLink href="/stations">Stations</NavLink>
             {user && <NavLink href="/profile">Profile</NavLink>}
             {consoleHref && (
               <NavLink href={consoleHref}>{user?.role === "STATION_EMPLOYEE" ? "Station console" : "Admin"}</NavLink>

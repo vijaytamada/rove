@@ -2,11 +2,12 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Home, User } from "lucide-react";
+import { Home, MapPin, User } from "lucide-react";
 
 // Phones only (hidden from md up, where the header navigation is used). Bookings joins in Phase 4.
 const tabs = [
   { label: "Home", icon: Home, href: "/", exact: true },
+  { label: "Stations", icon: MapPin, href: "/stations", exact: false },
   { label: "Profile", icon: User, href: "/profile", exact: false },
 ] as const;
 

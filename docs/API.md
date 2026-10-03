@@ -34,9 +34,28 @@ REST + JSON, prefix `/api/v1`, Swagger UI at `/api/docs`, OpenAPI JSON at `/api/
 Tokens: access token = JWT (15 min, `Authorization: Bearer`); refresh token = opaque random string (30 days), stored hashed.
 Error codes added: `UNAUTHENTICATED`, `INVALID_TOKEN`, `INVALID_CREDENTIALS`, `ACCOUNT_DISABLED`, `INVALID_REFRESH_TOKEN`, `EMAIL_TAKEN`, `PHONE_TAKEN`, `PHONE_REQUIRED`, `PHONE_ALREADY_VERIFIED`, `OTP_INVALID`, `OTP_EXPIRED`, `OTP_RESEND_TOO_SOON`, `OTP_TOO_MANY_ATTEMPTS`, `FORBIDDEN_ROLE`, `FORBIDDEN_SCOPE`, `INVALID_ASSIGNMENT`, `INVALID_ROLE`, `CANNOT_DISABLE_SELF`, `USER_NOT_FOUND`, `VALIDATION_ERROR`.
 
-### Phase 3 — Network & fleet
-Public: `GET /cities` · `GET /cities/:id/stations` · `GET /stations/:id` · `GET /stations/:id/vehicles?from&to` (available only)
-Admin/manager: `POST|PATCH /cities` · `POST|PATCH /stations` · `POST|PATCH /vehicle-models` · `POST|PATCH /vehicles` · `PATCH /vehicles/:id/status`
+### Phase 3 — Network & fleet (implemented)
+Public (no sign-in):
+| Endpoint | Notes |
+|---|---|
+| `GET /cities` | Active cities |
+| `GET /cities/:cityId/stations` | Active stations of an active city, each with `availableVehicles` |
+| `GET /stations/:id` | One active station |
+| `GET /stations/:id/vehicles` | Available scooters only (no registration number or odometer). Time-window availability arrives in Phase 4 |
+
+Management (signed in; scope enforced by role):
+| Endpoint | Access |
+|---|---|
+| `GET /manage/cities` · `POST /cities` · `PATCH /cities/:id` | list: admin, manager (own cities); create/update: **super admin** |
+| `GET /manage/stations?cityId&status` | admin, manager (own cities), employee (own stations) |
+| `POST /stations` · `PATCH /stations/:id` | admin, manager (own cities). City is immutable. Opening hours are both set or both empty |
+| `GET /manage/vehicle-models` | any staff. `POST /vehicle-models` · `PATCH /vehicle-models/:id`: **super admin** (global catalogue) |
+| `GET /manage/vehicles?stationId&cityId&status&modelId` · `GET /manage/vehicles/:id` | admin, manager (own cities), employee (own stations) |
+| `POST /vehicles` · `PATCH /vehicles/:id` · `DELETE /vehicles/:id` | admin, manager (own cities). PATCH can move a scooter to another station you manage. DELETE retires it (soft delete). Station capacity is enforced |
+| `PATCH /vehicles/:id/status` | admin/manager: AVAILABLE, MAINTENANCE, OFFLINE. Employee: MAINTENANCE only, own station. RESERVED/IN_RIDE are system-controlled; reserved or in-ride vehicles cannot be changed (409) |
+| `POST /users` · `GET /users` · `GET|PATCH /users/:id` · `PUT /users/:id/assignments` | admin: everyone; **manager: station employees of their own cities** (must assign at least one station inside their cities) |
+
+List endpoints take `?page&limit`. Codes added: `CITY_NOT_FOUND`, `CITY_EXISTS`, `INVALID_TIMEZONE`, `STATION_NOT_FOUND`, `STATION_EXISTS`, `INVALID_HOURS`, `STATION_FULL`, `MODEL_NOT_FOUND`, `MODEL_EXISTS`, `VEHICLE_NOT_FOUND`, `VEHICLE_CODE_TAKEN`, `REGISTRATION_TAKEN`, `VEHICLE_BUSY`, `VEHICLE_CHANGED`, `INVALID_STATUS_CHANGE`, `UNKNOWN_CITY`, `UNKNOWN_STATION`.
 
 ### Phase 4 — Booking
 `POST /bookings/quote` · `POST /bookings` · `POST /bookings/:id/pay` (mock) · `GET /bookings` (mine) · `GET /bookings/:id` · `POST /bookings/:id/cancel`

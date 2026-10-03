@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { LayoutDashboard, Truck, User } from "lucide-react";
+import { Building2, LayoutDashboard, MapPin, Package, Truck, User, Users, Bike } from "lucide-react";
 import type { ReactNode } from "react";
 import { logout } from "@/app/actions/auth";
 import { Wordmark } from "@/components/app/Wordmark";
@@ -18,9 +18,17 @@ const ROLE_LABEL: Record<Role, string> = {
 export async function ConsoleShell({ children }: { children: ReactNode }) {
   const user = await getCurrentUser();
 
+  const manager = user?.role === "SUPER_ADMIN" || user?.role === "CITY_MANAGER";
   const links = [
-    ...(user && user.role !== "STATION_EMPLOYEE"
-      ? [{ href: "/admin", label: "Admin", icon: LayoutDashboard }]
+    ...(manager
+      ? [
+          { href: "/admin", label: "Overview", icon: LayoutDashboard, exact: true },
+          { href: "/admin/cities", label: "Cities", icon: Building2 },
+          { href: "/admin/stations", label: "Stations", icon: MapPin },
+          { href: "/admin/fleet", label: "Fleet", icon: Bike },
+          { href: "/admin/models", label: "Vehicle models", icon: Package },
+          { href: "/admin/staff", label: "Staff", icon: Users },
+        ]
       : []),
     { href: "/staff", label: "Station console", icon: Truck },
     { href: "/profile", label: "Profile", icon: User },
@@ -43,9 +51,9 @@ export async function ConsoleShell({ children }: { children: ReactNode }) {
         <Link href="/" aria-label="Home" className="px-3 py-3">
           <Wordmark className="text-xl" />
         </Link>
-        <nav aria-label="Console" className="mt-4 flex flex-col gap-1">
-          {links.map(({ href, label, icon: Icon }) => (
-            <NavLink key={href} href={href} variant="side">
+        <nav aria-label="Console" className="mt-4 flex flex-col gap-1 overflow-y-auto">
+          {links.map(({ href, label, icon: Icon, exact }) => (
+            <NavLink key={href} href={href} variant="side" exact={exact}>
               <Icon size={18} strokeWidth={1.75} aria-hidden="true" />
               {label}
             </NavLink>
@@ -75,8 +83,8 @@ export async function ConsoleShell({ children }: { children: ReactNode }) {
             </form>
           </div>
           <nav aria-label="Console" className="flex gap-1 overflow-x-auto px-3 pb-2">
-            {links.map(({ href, label }) => (
-              <NavLink key={href} href={href}>
+            {links.map(({ href, label, exact }) => (
+              <NavLink key={href} href={href} exact={exact}>
                 {label}
               </NavLink>
             ))}

@@ -36,6 +36,8 @@ Order matters: **infra → backend → web → emulator → Flutter**.
 
 **Seed users (once, after migrations):** `cd backend && npm run prisma:seed` creates a super admin and a demo customer. Their emails/passwords come from `SEED_*` in `.env` (defaults in `.env.example`: `admin@rove.local`, `customer@rove.local`). Safe to re-run. Cities, stations and staff seeds arrive in Phase 3.
 
+`npm run prisma:seed` also creates 2 cities (Bengaluru, Hyderabad), 5 stations, 3 vehicle models and 12 scooters, a city manager per city (`manager.blr@rove.local`, `manager.hyd@rove.local`) and a station employee per station (`employee.indiranagar@rove.local`, `employee.koramangala@rove.local`, `employee.mg-road@rove.local`, `employee.hitech-city@rove.local`, `employee.banjara-hills@rove.local`). Staff share the password in `SEED_STAFF_PASSWORD`.
+
 Sign in with the seeded accounts on the website (http://localhost:3000/login) and in the Flutter app.
 
 Mock OTP: verification codes are always `123456` and are logged by the backend. Never enabled in production (the app refuses to start with `OTP_PROVIDER=mock` when `NODE_ENV=production`).

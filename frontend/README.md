@@ -25,4 +25,6 @@ npm run lint
 - `src/styles/tokens.css` design tokens (source of truth with `docs/UI.md`)
 - `src/lib/config.ts` `APP_NAME` + `API_URL`; `src/lib/api.ts` API client
 
+Pages: `/stations` and `/stations/[id]` (public browsing); console: `/admin` (overview), `/admin/cities`, `/admin/stations[/id]`, `/admin/fleet[/id]`, `/admin/models`, `/admin/staff[/id]`, `/staff` (station console). Admin pages use server actions (`src/app/actions/admin.ts`) and `<ActionForm>` / `Fields` (`src/components/admin`).
+
 Route groups: `(site)` public + customer pages, `(auth)` sign-in/register, `(console)` staff and admin (see `docs/UI.md`).

@@ -64,5 +64,11 @@ These are the simplest reasonable defaults so Phases 4–6 can proceed; confirm 
 
 | 2026-10-03 | **Mobile app is customer-only.** Station employees, city managers and admins use the website (responsive, works on phone/tablet). A separate staff app is planned later (not now; revisit in Phase 12 for QR scanning, offline and smart locks) and would share the Flutter codebase, API client and tokens | Keeps staff/admin code out of the public app; each app fits its users |
 
+| 2026-10-03 | Phase 3: vehicle models are a global catalogue managed by super admins only (managers read); pricing plans (Phase 4) are per city and managed by managers | Models are shared across cities |
+| 2026-10-03 | Stations and cities are never deleted (inactive/hidden instead); vehicles are retired (soft delete) | Keep history for bookings |
+| 2026-10-03 | Employees may only flag MAINTENANCE; managers/admins set AVAILABLE/OFFLINE; RESERVED/IN_RIDE are system-controlled | Matches the RBAC matrix and protects bookings |
+| 2026-10-03 | Public station listing shows availability by current status; time-window availability arrives with bookings in Phase 4 | Needs booking data |
+| 2026-10-03 | Demo data uses a fictional vehicle brand (Voltra) | No claims about real products |
+
 ## 8. Open questions
 See the end of the planning summary / `docs/PHASES.md` §Open decisions. Resolve before the phase noted.

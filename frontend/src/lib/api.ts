@@ -1,4 +1,5 @@
 import { API_URL } from "./config";
+import type { CityView, StationView, VehiclePublicView } from "./types";
 
 export type CheckStatus = "up" | "down";
 
@@ -27,7 +28,7 @@ export type ApiResult<T> =
 /** Server-side call to the backend API. Never throws; network failures become `NETWORK_ERROR`. */
 export async function apiRequest<T = void>(
   path: string,
-  opts: { method?: "GET" | "POST" | "PATCH" | "PUT"; body?: unknown; token?: string } = {},
+  opts: { method?: "GET" | "POST" | "PATCH" | "PUT" | "DELETE"; body?: unknown; token?: string } = {},
 ): Promise<ApiResult<T>> {
   try {
     const res = await fetch(`${API_URL}${path}`, {
@@ -65,3 +66,15 @@ export async function apiRequest<T = void>(
     };
   }
 }
+
+// ---- Public browsing (no sign-in) ----
+
+async function publicGet<T>(path: string): Promise<T | null> {
+  const res = await apiRequest<T>(path);
+  return res.ok ? res.data : null;
+}
+
+export const getCities = () => publicGet<CityView[]>("/cities");
+export const getCityStations = (cityId: string) => publicGet<StationView[]>(`/cities/${cityId}/stations`);
+export const getStation = (id: string) => publicGet<StationView>(`/stations/${id}`);
+export const getStationVehicles = (id: string) => publicGet<VehiclePublicView[]>(`/stations/${id}/vehicles`);

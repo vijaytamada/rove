@@ -10,7 +10,8 @@ A station-based e-scooter rental platform. Customers pick a station, browse scoo
 E-scooters only for now; bikes/cars must stay *possible* but are NOT built.
 
 ## Current phase
-**Phases 1 (Foundation) and 2 (Authentication & RBAC) complete. Next: Phase 3 (Cities, Stations & Fleet).**
+**Phases 1 (Foundation) and 2 (Authentication & RBAC) complete. Phase 3 (Cities, Stations & Fleet): backend + website done, Flutter browsing in progress. Next: Phase 4 (Customer Booking).**
+Phase 3 facts: management reads live under `/manage/*`, writes on resource paths; public browse endpoints are `@Public()`; every management service calls `ScopeService` (`assertStationIdAccess`, `stationFilter`); vehicle status rules are in `modules/vehicles/vehicle-status.ts`; admin web pages use server actions in `frontend/src/app/actions/admin.ts` and `<ActionForm>`; e2e test data uses the `e2e-` prefix and is cleaned up (seed data is never touched).
 Phase 2 facts: global `JwtAuthGuard` + `RolesGuard` (`@Public()`, `@Roles()`, `@CurrentUser()`), `ScopeService` for city/station scope, opaque rotating refresh tokens, mock OTP behind `OTP_PROVIDER`, uniform error body with stable `code`, seed users via `npm run prisma:seed`. Flutter auth (sign in/register/profile/OTP, secure token storage, auto refresh) is done too. Web auth: httpOnly cookies set by server actions, `src/proxy.ts` refreshes tokens and redirects by role, pages re-check with `requireUser/requireRole` (`src/lib/dal.ts`). `StaffAssignment` city/station ids have no FK until Phase 3 adds those tables.
 Foundation facts: NestJS 12 is ESM (`.js` import suffixes, explicit `@Inject()`), Prisma 7 (URL in `prisma.config.ts`, client generated to `backend/src/generated/prisma`), Vitest + oxlint, Next.js 16 (read `frontend/AGENTS.md`), Docker host ports Postgres 5442 / Redis 6389, backend 3001, web 3000. Run commands: `docs/DEV_SETUP.md`.
 Update this line whenever a phase completes.

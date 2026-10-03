@@ -41,6 +41,13 @@ PostgreSQL via Prisma. This lists expected entities and purpose only. Detailed c
 - `StaffAssignment`: exactly one of `cityId` / `stationId` (DB CHECK). No foreign keys yet; Phase 3 adds them.
 - OTP challenges live in Redis (`otp:phone:<userId>`, TTL 5 min; `otp:cooldown:<userId>`, TTL 30 s), not in Postgres. The `OtpChallenge` table from the entity list is not needed.
 
+## Phase 3 notes (implemented: City, Station, VehicleModel, Vehicle)
+- `City`: unique (name, state); `timezone` (IANA); `isActive` hides it from customers. Never deleted.
+- `Station`: unique (city, name); lat/lng, `capacity`, optional `opensAt`/`closesAt` (HH:mm, city time zone), `status` ACTIVE/INACTIVE. Never deleted. CHECKs: capacity > 0, valid lat/lng.
+- `VehicleModel`: global catalogue; `type` enum (SCOOTER only now); range, top speed, optional battery Wh; `isActive` retires a model.
+- `Vehicle`: `code` unique, optional unique `registrationNumber`, `status`, `batteryPercent`, `odometerKm`, nullable `stationId` (null while out on a ride, set by Phase 5), `retiredAt` (soft delete). CHECKs: battery 0-100, odometer >= 0. Type-specific attributes live on `VehicleModel` so bikes and cars can be added later.
+- `StaffAssignment.cityId/stationId` now have foreign keys (ON DELETE RESTRICT).
+
 ## Key relationships
 ```
 City 1─* Station 1─* Vehicle *─1 VehicleModel 1─* PricingPlan

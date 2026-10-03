@@ -2,41 +2,14 @@
 
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
-import { apiRequest, type ApiResult } from "@/lib/api";
+import { apiRequest } from "@/lib/api";
 import { homeFor, safeNext } from "@/lib/access";
 import { clearSessionCookies, getAccessToken, getRefreshToken, setSessionCookies } from "@/lib/session";
+import { failure, text, type FormState } from "@/lib/form";
 import type { AuthResult, UserView } from "@/lib/types";
 
-export interface FormState {
-  ok?: boolean;
-  message?: string;
-  error?: string;
-  fieldErrors?: Record<string, string>;
-  /** Submitted values (never passwords) so a failed submit does not clear the form. */
-  values?: Record<string, string>;
-}
+export type { FormState } from "@/lib/form";
 
-const FIELDS = ["email", "password", "fullName", "phone", "code"];
-
-/** Turns the API's class-validator messages ("email must be an email") into per-field errors. */
-function failure(res: Extract<ApiResult<unknown>, { ok: false }>): FormState {
-  if (res.code === "VALIDATION_ERROR" && res.details?.length) {
-    const fieldErrors: Record<string, string> = {};
-    for (const line of res.details) {
-      const field = FIELDS.find((f) => line.startsWith(`${f} `));
-      if (field && !fieldErrors[field]) fieldErrors[field] = line.charAt(0).toUpperCase() + line.slice(1);
-    }
-    return Object.keys(fieldErrors).length
-      ? { fieldErrors, error: "Check the highlighted fields." }
-      : { error: res.details[0] };
-  }
-  if (res.code === "EMAIL_TAKEN") return { fieldErrors: { email: res.message } };
-  if (res.code === "PHONE_TAKEN") return { fieldErrors: { phone: res.message } };
-  if (res.code === "OTP_INVALID") return { fieldErrors: { code: res.message } };
-  return { error: res.message };
-}
-
-const text = (form: FormData, name: string) => String(form.get(name) ?? "").trim();
 const optional = (form: FormData, name: string) => text(form, name).replace(/\s+/g, "") || undefined;
 
 export async function login(_prev: FormState, form: FormData): Promise<FormState> {
