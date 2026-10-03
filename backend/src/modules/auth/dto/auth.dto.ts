@@ -1,26 +1,8 @@
-import { IsEmail, IsOptional, IsString, Length, Matches, MaxLength, MinLength } from 'class-validator';
+import { Transform } from 'class-transformer';
+import { IsEmail, IsString, Length, Matches, MaxLength, MinLength } from 'class-validator';
 import { PHONE_MESSAGE, PHONE_PATTERN } from '../../users/dto/user.dto.js';
 
-export class RegisterDto {
-  @IsEmail()
-  @MaxLength(254)
-  email!: string;
-
-  @IsString()
-  @MinLength(8)
-  @MaxLength(128)
-  password!: string;
-
-  @IsString()
-  @MinLength(1)
-  @MaxLength(100)
-  fullName!: string;
-
-  @IsOptional()
-  @Matches(PHONE_PATTERN, { message: PHONE_MESSAGE })
-  phone?: string;
-}
-
+/** Staff sign-in (customers use their phone number). */
 export class LoginDto {
   @IsEmail()
   email!: string;
@@ -37,8 +19,37 @@ export class RefreshDto {
   refreshToken!: string;
 }
 
+/** Profile phone verification (after a phone number change). */
 export class VerifyOtpDto {
   @Matches(/^\d{6}$/, { message: 'code must be 6 digits' })
   @Length(6, 6)
   code!: string;
+}
+
+export class PhoneRequestDto {
+  @Matches(PHONE_PATTERN, { message: PHONE_MESSAGE })
+  phone!: string;
+}
+
+export class PhoneVerifyDto {
+  @Matches(PHONE_PATTERN, { message: PHONE_MESSAGE })
+  phone!: string;
+
+  @Matches(/^\d{6}$/, { message: 'code must be 6 digits' })
+  code!: string;
+}
+
+const trim = ({ value }: { value: unknown }) => (typeof value === 'string' ? value.trim() : value);
+
+export class PhoneSignupDto {
+  @IsString()
+  @MinLength(20)
+  @MaxLength(100)
+  signupToken!: string;
+
+  @Transform(trim)
+  @IsString()
+  @MinLength(1)
+  @MaxLength(100)
+  fullName!: string;
 }

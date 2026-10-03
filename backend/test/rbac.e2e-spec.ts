@@ -235,7 +235,7 @@ describe('RBAC and staff management (e2e)', () => {
   describe('disabling users', () => {
     it('blocks login and refresh for a disabled user and revokes their sessions', async () => {
       const u = await t.createUser('STATION_EMPLOYEE');
-      const { refreshToken } = await t.login(u.email);
+      const { refreshToken } = await t.login(u);
 
       await t.http().patch(`/api/v1/users/${u.id}`).set(adminAuth).send({ status: 'DISABLED' }).expect(200);
 

@@ -7,30 +7,44 @@ import { configureApp } from '../src/app.setup.js';
 import type { Role, VehicleStatus } from '../src/generated/prisma/client.js';
 import { PrismaService } from '../src/infra/prisma/prisma.service.js';
 import { RedisService } from '../src/infra/redis/redis.service.js';
+import { MOCK_OTP_CODE } from '../src/providers/otp/mock-otp.provider.js';
 import { PasswordService } from '../src/modules/users/password.service.js';
 
 export const TEST_PASSWORD = 'Test-Pass-12345';
+export const OTP_CODE = MOCK_OTP_CODE;
 // Everything the tests create carries this prefix so cleanup never touches seed/demo data.
 const PREFIX = 'e2e-';
+// Test phone numbers share this prefix so their Redis keys can be cleaned up.
+const PHONE_PREFIX = '+1555';
 
 export type Auth = { Authorization: string };
+export type Tokens = { accessToken: string; refreshToken: string };
+export interface TestUser {
+  id: string;
+  role: Role;
+  email: string | null;
+  phone: string | null;
+}
 
 export interface TestApp {
   app: INestApplication;
   prisma: PrismaService;
+  redis: RedisService;
   http: () => ReturnType<typeof request>;
   email: (label?: string) => string;
   phone: () => string;
+  /** Customers get a (verified) phone and no email/password; staff get an email + password. */
   createUser: (
     role: Role,
-    opts?: { phone?: string; cityIds?: string[]; stationIds?: string[] },
-  ) => Promise<{ id: string; email: string }>;
-  login: (email: string, password?: string) => Promise<{ accessToken: string; refreshToken: string }>;
+    opts?: { phone?: string; verified?: boolean; cityIds?: string[]; stationIds?: string[] },
+  ) => Promise<TestUser>;
+  /** Staff: password sign-in. Customers: phone + one-time code. A string means staff email + test password. */
+  login: (who: string | Pick<TestUser, 'role' | 'email' | 'phone'>, password?: string) => Promise<Tokens>;
   /** Creates a user of `role` (with optional scope) and returns an Authorization header for them. */
   asRole: (
     role: Role,
     scope?: { cityIds?: string[]; stationIds?: string[] },
-  ) => Promise<{ id: string; email: string; auth: Auth }>;
+  ) => Promise<TestUser & { auth: Auth }>;
   makeCity: (opts?: { isActive?: boolean }) => Promise<{ id: string; name: string }>;
   makeStation: (
     cityId: string,
@@ -56,21 +70,32 @@ export async function createTestApp(): Promise<TestApp> {
   const passwords = app.get(PasswordService);
   const http = () => request(app.getHttpServer());
   const short = () => randomUUID().slice(0, 8);
+  const phone = () => `${PHONE_PREFIX}${String(Math.floor(Math.random() * 1e7)).padStart(7, '0')}`;
 
-  const login: TestApp['login'] = async (email, password = TEST_PASSWORD) => {
-    const res = await http().post('/api/v1/auth/login').send({ email, password }).expect(200);
+  const login: TestApp['login'] = async (who, password = TEST_PASSWORD) => {
+    if (typeof who === 'string' || who.role !== 'CUSTOMER') {
+      const email = typeof who === 'string' ? who : who.email;
+      const res = await http().post('/api/v1/auth/login').send({ email, password }).expect(200);
+      return { accessToken: res.body.accessToken, refreshToken: res.body.refreshToken };
+    }
+    await http().post('/api/v1/auth/phone/request').send({ phone: who.phone }).expect(200);
+    const res = await http().post('/api/v1/auth/phone/verify').send({ phone: who.phone, code: OTP_CODE }).expect(200);
     return { accessToken: res.body.accessToken, refreshToken: res.body.refreshToken };
   };
 
   const createUser: TestApp['createUser'] = async (role, opts) => {
-    const email = `${PREFIX}${role.toLowerCase()}-${short()}@rove.test`;
+    const isCustomer = role === 'CUSTOMER';
+    const email = isCustomer ? null : `${PREFIX}${role.toLowerCase()}-${short()}@rove.test`;
+    const userPhone = opts?.phone ?? (isCustomer ? phone() : null);
     const user = await prisma.user.create({
       data: {
         email,
-        passwordHash: await passwords.hash(TEST_PASSWORD),
-        fullName: `Test ${role}`,
+        passwordHash: isCustomer ? null : await passwords.hash(TEST_PASSWORD),
+        // Customers need a name too; the e2e- prefix lets cleanup find them.
+        fullName: `${PREFIX}Test ${role}`,
         role,
-        phone: opts?.phone ?? null,
+        phone: userPhone,
+        phoneVerifiedAt: isCustomer && opts?.verified !== false ? new Date() : null,
         assignments: {
           create: [
             ...(opts?.cityIds ?? []).map((cityId) => ({ cityId })),
@@ -79,21 +104,21 @@ export async function createTestApp(): Promise<TestApp> {
         },
       },
     });
-    return { id: user.id, email };
+    return { id: user.id, role, email, phone: userPhone };
   };
 
   return {
     app,
     prisma,
+    redis,
     http,
     email: (label = 'user') => `${PREFIX}${label}-${short()}@rove.test`,
-    // Unique, valid E.164 test number.
-    phone: () => `+1555${String(Math.floor(Math.random() * 1e7)).padStart(7, '0')}`,
+    phone,
     createUser,
     login,
     async asRole(role, scope) {
       const u = await createUser(role, scope);
-      return { ...u, auth: { Authorization: `Bearer ${(await login(u.email)).accessToken}` } };
+      return { ...u, auth: { Authorization: `Bearer ${(await login(u)).accessToken}` } };
     },
     async makeCity(opts) {
       const name = `${PREFIX}city-${short()}`;
@@ -129,12 +154,18 @@ export async function createTestApp(): Promise<TestApp> {
       return { id: vehicle.id, code };
     },
     async cleanup() {
-      const users = await prisma.user.findMany({ where: { email: { startsWith: PREFIX } }, select: { id: true } });
-      for (const u of users) await redis.client.del(`otp:phone:${u.id}`, `otp:cooldown:${u.id}`);
-      const throttled = await redis.client.keys(`login:fail:${PREFIX}*`);
-      if (throttled.length) await redis.client.del(...throttled);
+      const users = await prisma.user.findMany({
+        where: { OR: [{ email: { startsWith: PREFIX } }, { fullName: { startsWith: PREFIX } }] },
+        select: { id: true },
+      });
+      const keys = [
+        ...(await redis.client.keys(`otp:*${PHONE_PREFIX}*`)),
+        ...(await redis.client.keys(`login:fail:${PREFIX}*`)),
+        ...users.flatMap((u) => [`otp:verify:${u.id}`, `otp:cooldown:verify:${u.id}`]),
+      ];
+      if (keys.length) await redis.client.del(...keys);
       // Order matters: assignments (via users) and vehicles reference stations; stations reference cities.
-      await prisma.user.deleteMany({ where: { email: { startsWith: PREFIX } } });
+      await prisma.user.deleteMany({ where: { id: { in: users.map((u) => u.id) } } });
       await prisma.vehicle.deleteMany({ where: { code: { startsWith: 'E2E-' } } });
       await prisma.station.deleteMany({ where: { name: { startsWith: PREFIX } } });
       await prisma.city.deleteMany({ where: { name: { startsWith: PREFIX } } });

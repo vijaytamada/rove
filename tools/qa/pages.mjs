@@ -1,4 +1,4 @@
-import { ACCOUNTS } from "./env.mjs";
+import { ACCOUNTS, loginPhone } from "./env.mjs";
 // Page-by-role matrix against the running website (http://localhost:3000) and API (http://localhost:3001).
 import { execSync } from "node:child_process";
 const WEB = "http://localhost:3000", API = "http://localhost:3001/api/v1";
@@ -11,7 +11,7 @@ const login = async (email, password) => {
 };
 const tokens = {
   anon: null,
-  customer: await login("customer@rove.local", ACCOUNTS.customer[1]),
+  customer: await loginPhone(API, ACCOUNTS.customer.phone),
   employee: await login("employee.indiranagar@rove.local", ACCOUNTS.manager[1]),
   manager: await login("manager.hyd@rove.local", ACCOUNTS.manager[1]),
   admin: await login("admin@rove.local", ACCOUNTS.admin[1]),

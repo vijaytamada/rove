@@ -28,6 +28,9 @@ Update this line whenever a phase completes.
 ## Repo layout
 `backend/` NestJS API · `frontend/` Next.js · `flutter/` mobile · `infra/` docker compose · `docs/` plan & design docs · `.ai-context/` this file.
 
+## In progress: phone + OTP login for customers
+Branch `feature/phone-otp-login` (backend done, website and Flutter app still to migrate). Read `docs/HANDOFF_PHONE_OTP.md` before continuing. `main` is the last fully working state.
+
 ## UI direction
 **Modern, minimal, simple, clean.** The website is a responsive website (desktop top navigation + wide layouts; phones get a compact header and bottom tabs) used by customers, station employees, city managers and admins; staff/admin use a sidebar console. The Flutter app is a separate native **customer-only** app; station employees, city managers and admins use the website, and a separate staff app is planned for later (not now). Both share the backend API, the design tokens and the screen specs, but are not pixel copies. Neutral palette + one green accent, near-black primary buttons, lots of whitespace. Tailwind. Clients never compute money. Full guide: `docs/UI.md`.
 
