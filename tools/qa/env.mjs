@@ -24,9 +24,14 @@ export const ACCOUNTS = {
   employee: ["employee.indiranagar@rove.local", ENV.SEED_STAFF_PASSWORD],
 };
 
+/** Clears the resend cooldown and hourly send count for a phone (development only). */
+export function clearOtpLimits(phone) {
+  execSync(`docker exec rove-redis sh -c "redis-cli del otp:cooldown:login:${phone} otp:sends:${phone}"`, { stdio: "ignore" });
+}
+
 /** Signs a customer in with phone + the development mock code (clears resend limits first, dev only). */
 export async function loginPhone(api, phone) {
-  execSync(`docker exec rove-redis sh -c "redis-cli del otp:cooldown:login:${phone} otp:sends:${phone}"`, { stdio: "ignore" });
+  clearOtpLimits(phone);
   const post = (path, body) => fetch(api + path, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
   await post("/auth/phone/request", { phone });
   const res = await (await post("/auth/phone/verify", { phone, code: "123456" })).json();

@@ -26,7 +26,7 @@ const vehHyd = (await api("/manage/vehicles?limit=100", tokens.admin)).items.fin
 const empHyd = (await api("/users?role=STATION_EMPLOYEE", tokens.admin)).items.find((u) => u.email.startsWith("employee.hitech"));
 const empBlr = (await api("/users?role=STATION_EMPLOYEE", tokens.admin)).items.find((u) => u.email.startsWith("employee.indira"));
 
-// expectation: "ok" = 200, "login" = redirect to /login, "home:<path>" = redirect to path, "404"
+// expectation: "ok" = 200, "login" = redirect to /login, "staff-login" = redirect to /login/staff, "home:<path>" = redirect to path, "404"
 const routes = [
   ["/", { anon: "ok", customer: "ok", employee: "ok", manager: "ok", admin: "ok" }],
   ["/stations", { anon: "ok", customer: "ok", employee: "ok", manager: "ok", admin: "ok" }],
@@ -34,21 +34,22 @@ const routes = [
   ["/stations/not-a-uuid", { anon: "404", customer: "404", employee: "404", manager: "404", admin: "404" }],
   ["/stations/00000000-0000-4000-8000-000000000000", { anon: "404", customer: "404", employee: "404", manager: "404", admin: "404" }],
   ["/login", { anon: "ok", customer: "to:/", employee: "to:/staff", manager: "to:/admin", admin: "to:/admin" }],
-  ["/register", { anon: "ok", customer: "to:/", employee: "to:/staff", manager: "to:/admin", admin: "to:/admin" }],
+  ["/login/staff", { anon: "ok", customer: "to:/", employee: "to:/staff", manager: "to:/admin", admin: "to:/admin" }],
+  ["/register", { anon: "login", customer: "to:/", employee: "to:/staff", manager: "to:/admin", admin: "to:/admin" }],
   ["/profile", { anon: "login", customer: "ok", employee: "ok", manager: "ok", admin: "ok" }],
-  ["/staff", { anon: "login", customer: "to:/", employee: "ok", manager: "ok", admin: "ok" }],
-  ["/admin", { anon: "login", customer: "to:/", employee: "to:/staff", manager: "ok", admin: "ok" }],
-  ["/admin/cities", { anon: "login", customer: "to:/", employee: "to:/staff", manager: "ok", admin: "ok" }],
-  ["/admin/stations", { anon: "login", customer: "to:/", employee: "to:/staff", manager: "ok", admin: "ok" }],
-  [`/admin/stations/${stationHyd.id}`, { anon: "login", customer: "to:/", employee: "to:/staff", manager: "ok", admin: "ok" }],
-  [`/admin/stations/${stationBlr.id}`, { anon: "login", customer: "to:/", employee: "to:/staff", manager: "404", admin: "ok" }],
-  ["/admin/fleet", { anon: "login", customer: "to:/", employee: "to:/staff", manager: "ok", admin: "ok" }],
-  [`/admin/fleet/${vehHyd.id}`, { anon: "login", customer: "to:/", employee: "to:/staff", manager: "ok", admin: "ok" }],
-  [`/admin/fleet/${vehBlr.id}`, { anon: "login", customer: "to:/", employee: "to:/staff", manager: "404", admin: "ok" }],
-  ["/admin/models", { anon: "login", customer: "to:/", employee: "to:/staff", manager: "ok", admin: "ok" }],
-  ["/admin/staff", { anon: "login", customer: "to:/", employee: "to:/staff", manager: "ok", admin: "ok" }],
-  [`/admin/staff/${empHyd.id}`, { anon: "login", customer: "to:/", employee: "to:/staff", manager: "ok", admin: "ok" }],
-  [`/admin/staff/${empBlr.id}`, { anon: "login", customer: "to:/", employee: "to:/staff", manager: "404", admin: "ok" }],
+  ["/staff", { anon: "staff-login", customer: "to:/", employee: "ok", manager: "ok", admin: "ok" }],
+  ["/admin", { anon: "staff-login", customer: "to:/", employee: "to:/staff", manager: "ok", admin: "ok" }],
+  ["/admin/cities", { anon: "staff-login", customer: "to:/", employee: "to:/staff", manager: "ok", admin: "ok" }],
+  ["/admin/stations", { anon: "staff-login", customer: "to:/", employee: "to:/staff", manager: "ok", admin: "ok" }],
+  [`/admin/stations/${stationHyd.id}`, { anon: "staff-login", customer: "to:/", employee: "to:/staff", manager: "ok", admin: "ok" }],
+  [`/admin/stations/${stationBlr.id}`, { anon: "staff-login", customer: "to:/", employee: "to:/staff", manager: "404", admin: "ok" }],
+  ["/admin/fleet", { anon: "staff-login", customer: "to:/", employee: "to:/staff", manager: "ok", admin: "ok" }],
+  [`/admin/fleet/${vehHyd.id}`, { anon: "staff-login", customer: "to:/", employee: "to:/staff", manager: "ok", admin: "ok" }],
+  [`/admin/fleet/${vehBlr.id}`, { anon: "staff-login", customer: "to:/", employee: "to:/staff", manager: "404", admin: "ok" }],
+  ["/admin/models", { anon: "staff-login", customer: "to:/", employee: "to:/staff", manager: "ok", admin: "ok" }],
+  ["/admin/staff", { anon: "staff-login", customer: "to:/", employee: "to:/staff", manager: "ok", admin: "ok" }],
+  [`/admin/staff/${empHyd.id}`, { anon: "staff-login", customer: "to:/", employee: "to:/staff", manager: "ok", admin: "ok" }],
+  [`/admin/staff/${empBlr.id}`, { anon: "staff-login", customer: "to:/", employee: "to:/staff", manager: "404", admin: "ok" }],
   ["/nope", { anon: "404", customer: "404", employee: "404", manager: "404", admin: "404" }],
   ["/manifest.webmanifest", { anon: "ok", customer: "ok", employee: "ok", manager: "ok", admin: "ok" }],
 ];
@@ -60,7 +61,7 @@ for (const [path, expect] of routes) {
   for (const [role, token] of Object.entries(tokens)) {
     const res = await fetch(WEB + path, { redirect: "manual", headers: token ? { Cookie: `rove_at=${token}` } : {} });
     const loc = res.headers.get("location") ? new URL(res.headers.get("location"), WEB) : null;
-    let actual = res.status === 200 ? "ok" : res.status === 404 ? "404" : loc ? (loc.pathname === "/login" ? "login" : `to:${loc.pathname}`) : `status ${res.status}`;
+    let actual = res.status === 200 ? "ok" : res.status === 404 ? "404" : loc ? (loc.pathname === "/login" ? "login" : loc.pathname === "/login/staff" ? "staff-login" : `to:${loc.pathname}`) : `status ${res.status}`;
     const want = expect[role];
     const body = res.status === 200 ? await res.text() : "";
     const crashed = /Application error|Internal Server Error|unhandled|Unhandled/.test(body) || res.status >= 500;
