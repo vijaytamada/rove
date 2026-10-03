@@ -26,10 +26,10 @@ REST + JSON, prefix `/api/v1`, Swagger UI at `/api/docs`, OpenAPI JSON at `/api/
 | `POST /auth/otp/send` | signed in | Sends a phone-verification code (mock: always `123456`, dev only). 30 s resend cooldown, 5 min expiry |
 | `POST /auth/otp/verify` | signed in | Body `{ code }`; 204. 5 wrong attempts lock the challenge |
 | `GET /me` · `PATCH /me` | signed in | Profile incl. `phoneVerified` and `scope { cityIds, stationIds }`. `PATCH` accepts `fullName`, `phone` (changing phone resets verification) |
-| `POST /users` | SUPER_ADMIN | Create `CITY_MANAGER` / `STATION_EMPLOYEE` / `SUPER_ADMIN` with optional `assignments` |
-| `GET /users?role&page&limit` · `GET /users/:id` | SUPER_ADMIN | |
-| `PATCH /users/:id` | SUPER_ADMIN | `fullName`, `status`. Disabling revokes the user's sessions; can't disable yourself |
-| `PUT /users/:id/assignments` | SUPER_ADMIN | Replaces the user's city/station assignments |
+| `POST /users` | SUPER_ADMIN (managers: employees only, see Phase 3) | Create `CITY_MANAGER` / `STATION_EMPLOYEE` / `SUPER_ADMIN` with optional `assignments` |
+| `GET /users?role&page&limit` · `GET /users/:id` | SUPER_ADMIN (managers: their employees) | |
+| `PATCH /users/:id` | SUPER_ADMIN (managers: their employees) | `fullName`, `status`. Disabling revokes the user's sessions; can't disable yourself |
+| `PUT /users/:id/assignments` | SUPER_ADMIN (managers: their employees) | Replaces the user's city/station assignments |
 
 Tokens: access token = JWT (15 min, `Authorization: Bearer`); refresh token = opaque random string (30 days), stored hashed.
 Error codes added: `UNAUTHENTICATED`, `INVALID_TOKEN`, `INVALID_CREDENTIALS`, `ACCOUNT_DISABLED`, `INVALID_REFRESH_TOKEN`, `EMAIL_TAKEN`, `PHONE_TAKEN`, `PHONE_REQUIRED`, `PHONE_ALREADY_VERIFIED`, `OTP_INVALID`, `OTP_EXPIRED`, `OTP_RESEND_TOO_SOON`, `OTP_TOO_MANY_ATTEMPTS`, `FORBIDDEN_ROLE`, `FORBIDDEN_SCOPE`, `INVALID_ASSIGNMENT`, `INVALID_ROLE`, `CANNOT_DISABLE_SELF`, `USER_NOT_FOUND`, `VALIDATION_ERROR`.

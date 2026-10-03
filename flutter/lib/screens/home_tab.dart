@@ -25,7 +25,7 @@ class HomeTab extends StatelessWidget {
           Text(
             staff
                 ? 'Station and admin tools are on the website. This app is for riders.'
-                : 'Scooter browsing and booking arrive in a later phase.',
+                : 'Browse stations to see which scooters are available. Booking arrives in a later phase.',
             style: const TextStyle(color: Tokens.inkMuted, fontSize: 16),
           ),
           const SizedBox(height: 24),
