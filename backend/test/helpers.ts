@@ -131,6 +131,8 @@ export async function createTestApp(): Promise<TestApp> {
     async cleanup() {
       const users = await prisma.user.findMany({ where: { email: { startsWith: PREFIX } }, select: { id: true } });
       for (const u of users) await redis.client.del(`otp:phone:${u.id}`, `otp:cooldown:${u.id}`);
+      const throttled = await redis.client.keys(`login:fail:${PREFIX}*`);
+      if (throttled.length) await redis.client.del(...throttled);
       // Order matters: assignments (via users) and vehicles reference stations; stations reference cities.
       await prisma.user.deleteMany({ where: { email: { startsWith: PREFIX } } });
       await prisma.vehicle.deleteMany({ where: { code: { startsWith: 'E2E-' } } });

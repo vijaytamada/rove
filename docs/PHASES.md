@@ -30,7 +30,7 @@ Each phase ends with a usable increment and a completion checklist. Don't start 
 - **Outcome:** Four roles can log in; protected endpoints enforce role + scope; e2e tests for auth and RBAC pass.
 
 ## Phase 3 — Cities, Stations & Fleet
-**Status: complete.** Backend: 58 e2e + 25 unit tests. Flutter: Stations tab (city picker, stations, scooters; 32 tests). Website: public `/stations` browsing; admin console for cities, stations (edit), fleet (add/edit/status/retire), vehicle models, staff; station employee console. Details: `docs/API.md`, `docs/RBAC.md`, `docs/DATABASE.md`.
+**Status: complete and fully tested** (see `docs/TESTING.md`). Backend: 70 e2e + 31 unit tests. Flutter: Stations tab (city picker, stations, scooters; 36 tests). Website: public `/stations` browsing; admin console for cities, stations (edit), fleet (add/edit/status/retire), vehicle models, staff; station employee console. Details: `docs/API.md`, `docs/RBAC.md`, `docs/DATABASE.md`.
 - **Objective:** Physical network and vehicles.
 - **Features:** CRUD cities & stations; vehicle models & vehicles (type=SCOOTER); vehicle status (`AVAILABLE, RESERVED, IN_RIDE, MAINTENANCE, OFFLINE`); station assignment of staff; public browse endpoints (cities → stations → available scooters); seed demo data.
 - **Modules:** `Cities`, `Stations`, `Vehicles` (incl. models), staff assignment inside `Users`/`Rbac`.

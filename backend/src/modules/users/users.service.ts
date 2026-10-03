@@ -127,8 +127,12 @@ export class UsersService {
       throw new AppException(403, 'FORBIDDEN_ROLE', 'City managers can only create station employees.');
     }
     const assignments = validateAssignments(dto.role, dto.assignments ?? []);
-    if (actor.role === 'CITY_MANAGER' && assignments.length === 0) {
+    // Staff without a city/station can't do anything, so require one when the account is created.
+    if (dto.role === 'STATION_EMPLOYEE' && assignments.length === 0) {
       throw new AppException(400, 'INVALID_ASSIGNMENT', 'Assign the employee to at least one station.');
+    }
+    if (dto.role === 'CITY_MANAGER' && assignments.length === 0) {
+      throw new AppException(400, 'INVALID_ASSIGNMENT', 'Assign the city manager to at least one city.');
     }
     await this.assertAssignmentTargets(actor, assignments);
     return this.create({

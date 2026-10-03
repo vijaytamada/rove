@@ -117,6 +117,21 @@ describe('RBAC and staff management (e2e)', () => {
       expect(station.body.code).toBe('UNKNOWN_STATION');
     });
 
+    it('requires a city for managers and a station for employees', async () => {
+      const mgr = await t.http().post('/api/v1/users').set(adminAuth)
+        .send({ email: t.email('nomgr'), password: TEST_PASSWORD, fullName: 'M', role: 'CITY_MANAGER' })
+        .expect(400);
+      expect(mgr.body.code).toBe('INVALID_ASSIGNMENT');
+      const emp = await t.http().post('/api/v1/users').set(adminAuth)
+        .send({ email: t.email('noemp'), password: TEST_PASSWORD, fullName: 'E', role: 'STATION_EMPLOYEE', assignments: [] })
+        .expect(400);
+      expect(emp.body.code).toBe('INVALID_ASSIGNMENT');
+      // Super admins need no assignment.
+      await t.http().post('/api/v1/users').set(adminAuth)
+        .send({ email: t.email('adm2'), password: TEST_PASSWORD, fullName: 'A', role: 'SUPER_ADMIN' })
+        .expect(201);
+    });
+
     it('does not create customers through the staff endpoint', async () => {
       const res = await t
         .http()

@@ -5,6 +5,7 @@ import { EmptyRow, ErrorBanner, PageHeader, Panel, RowButton, RowLink, TableWrap
 import { hoursLabel } from "@/components/fleet/StationCard";
 import { StatusChip } from "@/components/app/StatusChip";
 import { requireRole } from "@/lib/dal";
+import { isUuid } from "@/lib/ids";
 import { apiGetAll } from "@/lib/server-api";
 import type { CityView, StationView } from "@/lib/types";
 
@@ -16,7 +17,7 @@ export default async function StationsAdminPage({ searchParams }: { searchParams
   const { error, city } = await searchParams;
   const [cities, stations] = await Promise.all([
     apiGetAll<CityView>("/manage/cities"),
-    apiGetAll<StationView>(`/manage/stations${city ? `?cityId=${encodeURIComponent(city)}` : ""}`),
+    apiGetAll<StationView>(`/manage/stations${isUuid(city) ? `?cityId=${city}` : ""}`),
   ]);
   const cityName = new Map(cities.map((c) => [c.id, c.name]));
 
@@ -26,7 +27,7 @@ export default async function StationsAdminPage({ searchParams }: { searchParams
       <ErrorBanner message={error} />
 
       <div className="grid gap-6 lg:grid-cols-3">
-        <div className="lg:col-span-2">
+        <div className="min-w-0 lg:col-span-2">
           <TableWrap>
             <thead>
               <tr>

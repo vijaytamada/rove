@@ -29,13 +29,52 @@ export function valuesOf(form: FormData, exclude: string[] = ["password"]): Reco
   return values;
 }
 
+const FIELD_LABELS: Record<string, string> = {
+  fullName: "Full name",
+  rangeKm: "Range",
+  topSpeedKmh: "Top speed",
+  batteryCapacityWh: "Battery capacity",
+  batteryPercent: "Battery",
+  odometerKm: "Odometer",
+  registrationNumber: "Registration number",
+  opensAt: "Opening time",
+  closesAt: "Closing time",
+  modelId: "Model",
+  stationId: "Station",
+  cityId: "City",
+};
+
+/** "rangeKm" -> "Range"; unknown camelCase ids become "Some field name". */
+export function fieldLabel(field: string): string {
+  if (FIELD_LABELS[field]) return FIELD_LABELS[field];
+  const words = field.replace(/([a-z0-9])([A-Z])/g, "$1 $2").toLowerCase();
+  return words.charAt(0).toUpperCase() + words.slice(1);
+}
+
+/** Rewrites class-validator wording ("must be longer than or equal to 1 characters") in plain language. */
+export function friendlyMessage(line: string): string {
+  const text = line
+    .replace(/ must be longer than or equal to 1 characters?$/, " is required")
+    .replace(/ must be longer than or equal to (\d+) characters?$/, " must be at least $1 characters")
+    .replace(/ must be shorter than or equal to (\d+) characters?$/, " must be at most $1 characters")
+    .replace(/ must be a number conforming to the specified constraints$/, " must be a number")
+    .replace(/ must be an integer number$/, " must be a whole number")
+    .replace(/ must be a latitude string or number$/, " must be a number between -90 and 90")
+    .replace(/ must be a longitude string or number$/, " must be a number between -180 and 180")
+    .replace(/ must not be less than (\S+)$/, " must be at least $1")
+    .replace(/ must not be greater than (\S+)$/, " must be at most $1")
+    .replace(/ (should not be empty|must be a string|must be a UUID)$/, " is required");
+  const [field, ...rest] = text.split(" ");
+  return `${fieldLabel(field)} ${rest.join(" ")}`.trim();
+}
+
 /** Turns an API failure into form state. Validation messages ("email must be an email") map to fields. */
 export function failure(res: Extract<ApiResult<unknown>, { ok: false }>): FormState {
   if (res.code === "VALIDATION_ERROR" && res.details?.length) {
     const fieldErrors: Record<string, string> = {};
     for (const line of res.details) {
       const field = line.split(" ")[0];
-      if (field && !fieldErrors[field]) fieldErrors[field] = line.charAt(0).toUpperCase() + line.slice(1);
+      if (field && !fieldErrors[field]) fieldErrors[field] = friendlyMessage(line);
     }
     return { fieldErrors, error: "Check the highlighted fields." };
   }
@@ -43,5 +82,6 @@ export function failure(res: Extract<ApiResult<unknown>, { ok: false }>): FormSt
   if (res.code === "PHONE_TAKEN") return { fieldErrors: { phone: res.message } };
   if (res.code === "OTP_INVALID") return { fieldErrors: { code: res.message } };
   if (res.code === "VEHICLE_CODE_TAKEN") return { fieldErrors: { code: res.message } };
+  if (res.code === "REGISTRATION_TAKEN") return { fieldErrors: { registrationNumber: res.message } };
   return { error: res.message };
 }

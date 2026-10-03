@@ -4,7 +4,8 @@ import '../api/api_client.dart';
 import '../models/user.dart';
 import 'token_store.dart';
 
-enum AuthStatus { loading, signedOut, signedIn }
+/// [unreachable]: a session is saved but the server could not be reached (offline or down).
+enum AuthStatus { loading, signedOut, signedIn, unreachable }
 
 /// App-wide sign-in state. Screens call these methods and show the returned [ApiError], if any.
 class AuthController extends ChangeNotifier {
@@ -30,10 +31,19 @@ class AuthController extends ChangeNotifier {
     final result = await api.get('/me');
     if (result is ApiOk) {
       _set(AuthStatus.signedIn, UserView.fromJson(result.json));
+    } else if (await tokens.readRefresh() != null) {
+      // The session was not rejected (tokens are only cleared on an explicit rejection), so the
+      // server is probably unreachable. Keep the session and let the user retry.
+      _set(AuthStatus.unreachable, null);
     } else {
-      // Invalid or unreachable: ask the user to sign in (a saved session is kept if only offline).
       _set(AuthStatus.signedOut, null);
     }
+  }
+
+  /// Tries again after [AuthStatus.unreachable].
+  Future<void> retry() async {
+    _set(AuthStatus.loading, null);
+    await init();
   }
 
   Future<ApiError?> login(String email, String password) async {

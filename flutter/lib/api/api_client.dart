@@ -125,8 +125,9 @@ class ApiClient {
       await tokens.save(access: data['accessToken'] as String, refresh: data['refreshToken'] as String);
       return true;
     }
-    // Only a rejected token ends the session; a network blip should not sign the user out.
-    if (result is ApiError && result.status != 0) {
+    // Only an explicit rejection ends the session. A network failure or a server error must not
+    // sign the user out.
+    if (result is ApiError && result.status == 401) {
       await tokens.clear();
       onSessionExpired?.call();
     }

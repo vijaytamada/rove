@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../auth/auth_controller.dart';
+import '../widgets/load_states.dart';
 import '../widgets/wordmark.dart';
 import 'home_tab.dart';
 import 'login_screen.dart';
@@ -17,6 +18,7 @@ class RootGate extends StatelessWidget {
       AuthStatus.loading => const _Splash(),
       AuthStatus.signedOut => const LoginScreen(),
       AuthStatus.signedIn => const MainShell(),
+      AuthStatus.unreachable => const _Unreachable(),
     };
   }
 }
@@ -27,6 +29,30 @@ class _Splash extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return const Scaffold(body: Center(child: Wordmark(size: 40)));
+  }
+}
+
+class _Unreachable extends StatelessWidget {
+  const _Unreachable();
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          const Wordmark(size: 32),
+          const SizedBox(height: 24),
+          Expanded(
+            flex: 0,
+            child: MessageState(
+              message: "Can't reach Rove right now. Check your connection and try again.",
+              onRetry: AuthScope.of(context).retry,
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }
 

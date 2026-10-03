@@ -106,19 +106,23 @@ export class VehiclesService {
     if (!model || !model.isActive) {
       throw new AppException(400, 'MODEL_NOT_FOUND', 'Choose an active vehicle model.');
     }
-    await this.assertCapacity(station.id);
 
     try {
-      const created = await this.prisma.vehicle.create({
-        data: {
-          modelId: dto.modelId,
-          stationId: dto.stationId,
-          code: dto.code,
-          registrationNumber: dto.registrationNumber ?? null,
-          batteryPercent: dto.batteryPercent ?? null,
-          odometerKm: dto.odometerKm ?? 0,
-        },
-        include: INCLUDE,
+      // The station row is locked so parallel requests can't both take the last free slot.
+      const created = await this.prisma.$transaction(async (tx) => {
+        await this.lockStation(tx, station.id);
+        await this.assertCapacity(tx, station.id);
+        return tx.vehicle.create({
+          data: {
+            modelId: dto.modelId,
+            stationId: dto.stationId,
+            code: dto.code,
+            registrationNumber: dto.registrationNumber ?? null,
+            batteryPercent: dto.batteryPercent ?? null,
+            odometerKm: dto.odometerKm ?? 0,
+          },
+          include: INCLUDE,
+        });
       });
       return toManage(created);
     } catch (e) {
@@ -132,21 +136,24 @@ export class VehiclesService {
     if (vehicle.stationId) await this.scopes.assertStationIdAccess(user, vehicle.stationId);
 
     const moving = dto.stationId !== undefined && dto.stationId !== vehicle.stationId;
-    if (moving) {
-      await this.scopes.assertStationIdAccess(user, dto.stationId!);
-      await this.assertCapacity(dto.stationId!);
-    }
+    if (moving) await this.scopes.assertStationIdAccess(user, dto.stationId!);
 
     try {
-      const updated = await this.prisma.vehicle.update({
-        where: { id },
-        data: {
-          ...(moving && { stationId: dto.stationId }),
-          ...(dto.registrationNumber !== undefined && { registrationNumber: dto.registrationNumber }),
-          ...(dto.batteryPercent !== undefined && { batteryPercent: dto.batteryPercent }),
-          ...(dto.odometerKm !== undefined && { odometerKm: dto.odometerKm }),
-        },
-        include: INCLUDE,
+      const updated = await this.prisma.$transaction(async (tx) => {
+        if (moving) {
+          await this.lockStation(tx, dto.stationId!);
+          await this.assertCapacity(tx, dto.stationId!);
+        }
+        return tx.vehicle.update({
+          where: { id },
+          data: {
+            ...(moving && { stationId: dto.stationId }),
+            ...(dto.registrationNumber !== undefined && { registrationNumber: dto.registrationNumber }),
+            ...(dto.batteryPercent !== undefined && { batteryPercent: dto.batteryPercent }),
+            ...(dto.odometerKm !== undefined && { odometerKm: dto.odometerKm }),
+          },
+          include: INCLUDE,
+        });
       });
       return toManage(updated);
     } catch (e) {
@@ -194,10 +201,15 @@ export class VehiclesService {
     }
   }
 
-  private async assertCapacity(stationId: string) {
+  /** Serializes capacity-changing writes for one station (held until the transaction ends). */
+  private async lockStation(tx: Prisma.TransactionClient, stationId: string) {
+    await tx.$queryRaw`SELECT id FROM "Station" WHERE id = ${stationId}::uuid FOR UPDATE`;
+  }
+
+  private async assertCapacity(tx: Prisma.TransactionClient, stationId: string) {
     const [station, count] = await Promise.all([
-      this.prisma.station.findUniqueOrThrow({ where: { id: stationId }, select: { capacity: true } }),
-      this.prisma.vehicle.count({ where: { stationId, retiredAt: null } }),
+      tx.station.findUniqueOrThrow({ where: { id: stationId }, select: { capacity: true } }),
+      tx.vehicle.count({ where: { stationId, retiredAt: null } }),
     ]);
     if (count >= station.capacity) {
       throw new AppException(409, 'STATION_FULL', 'This station is at capacity.');

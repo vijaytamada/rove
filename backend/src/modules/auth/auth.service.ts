@@ -3,6 +3,7 @@ import { AppException } from '../../common/app-exception.js';
 import { PasswordService } from '../users/password.service.js';
 import { UsersService, type UserView } from '../users/users.service.js';
 import type { LoginDto, RegisterDto } from './dto/auth.dto.js';
+import { LoginThrottleService } from './login-throttle.service.js';
 import { TokensService, type TokenPair } from './tokens.service.js';
 
 export type AuthResult = TokenPair & { user: UserView };
@@ -13,6 +14,7 @@ export class AuthService {
     @Inject(UsersService) private readonly users: UsersService,
     @Inject(PasswordService) private readonly passwords: PasswordService,
     @Inject(TokensService) private readonly tokens: TokensService,
+    @Inject(LoginThrottleService) private readonly throttle: LoginThrottleService,
   ) {}
 
   /** Public registration always creates a CUSTOMER. Staff are created by a super admin. */
@@ -28,11 +30,14 @@ export class AuthService {
   }
 
   async login(dto: LoginDto): Promise<AuthResult> {
+    await this.throttle.assertAllowed(dto.email);
     const user = await this.users.getByEmail(dto.email);
     const ok = await this.passwords.verify(user?.passwordHash ?? null, dto.password);
     if (!user || !ok) {
+      await this.throttle.recordFailure(dto.email);
       throw new AppException(401, 'INVALID_CREDENTIALS', 'Email or password is incorrect.');
     }
+    await this.throttle.reset(dto.email);
     if (user.status !== 'ACTIVE') {
       throw new AppException(403, 'ACCOUNT_DISABLED', 'This account has been disabled.');
     }

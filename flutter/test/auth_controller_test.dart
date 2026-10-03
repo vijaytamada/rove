@@ -32,6 +32,41 @@ void main() {
     expect(env.tokens.refresh, isNull);
   });
 
+  test('keeps the saved session and reports unreachable when the server cannot be reached', () async {
+    final env = TestEnv((r) async => throw Exception('offline'));
+    env.tokens
+      ..access = 'a'
+      ..refresh = 'r';
+    await env.auth.init();
+    expect(env.auth.status, AuthStatus.unreachable);
+    expect(env.tokens.refresh, 'r');
+  });
+
+  test('retry restores the session once the server is back', () async {
+    var down = true;
+    final env = TestEnv((r) async => down ? throw Exception('offline') : json(200, userJson()));
+    env.tokens
+      ..access = 'a'
+      ..refresh = 'r';
+    await env.auth.init();
+    expect(env.auth.status, AuthStatus.unreachable);
+    down = false;
+    await env.auth.retry();
+    expect(env.auth.status, AuthStatus.signedIn);
+  });
+
+  test('a server error during refresh does not sign the user out', () async {
+    final env = TestEnv((r) async => r.url.path.endsWith('/auth/refresh')
+        ? apiError(500, 'INTERNAL_ERROR', 'Something went wrong.')
+        : apiError(401, 'INVALID_TOKEN', 'expired'));
+    env.tokens
+      ..access = 'a'
+      ..refresh = 'r';
+    await env.auth.init();
+    expect(env.auth.status, AuthStatus.unreachable);
+    expect(env.tokens.refresh, 'r');
+  });
+
   test('login saves tokens and signs in', () async {
     final env = TestEnv((r) async => authOk());
     final error = await env.auth.login(' asha@example.com ', 'secret-pass');

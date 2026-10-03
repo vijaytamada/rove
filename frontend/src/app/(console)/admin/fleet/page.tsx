@@ -15,6 +15,7 @@ import {
   VehicleStatusChip,
 } from "@/components/admin/ui";
 import { requireRole } from "@/lib/dal";
+import { isUuid } from "@/lib/ids";
 import { apiGet, apiGetAll } from "@/lib/server-api";
 import type { StationView, VehicleManageView, VehicleModelView, VehicleStatus } from "@/lib/types";
 
@@ -32,7 +33,7 @@ export default async function FleetPage({
   const { error, station, status } = await searchParams;
 
   const query = new URLSearchParams();
-  if (station) query.set("stationId", station);
+  if (isUuid(station)) query.set("stationId", station);
   if (status && ALL_STATUSES.includes(status as VehicleStatus)) query.set("status", status);
   const qs = query.toString();
 
@@ -53,7 +54,7 @@ export default async function FleetPage({
           <label htmlFor="station" className="mb-1.5 block text-sm font-medium">
             Station
           </label>
-          <select id="station" name="station" defaultValue={station ?? ""} className="h-10 min-w-44 rounded-control border border-line bg-surface px-3 text-sm">
+          <select id="station" name="station" defaultValue={isUuid(station) ? station : ""} className="h-10 min-w-44 rounded-control border border-line bg-surface px-3 text-sm">
             <option value="">All stations</option>
             {stations.map((s) => (
               <option key={s.id} value={s.id}>
@@ -81,7 +82,7 @@ export default async function FleetPage({
       </form>
 
       <div className="grid gap-6 lg:grid-cols-3">
-        <div className="lg:col-span-2">
+        <div className="min-w-0 lg:col-span-2">
           <TableWrap>
             <thead>
               <tr>

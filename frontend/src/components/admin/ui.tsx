@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { StatusChip } from "@/components/app/StatusChip";
+import { messageForCode } from "@/lib/error-messages";
 import type { VehicleStatus } from "@/lib/types";
 
 export function PageHeader({ title, description, action }: { title: string; description?: string; action?: ReactNode }) {
@@ -17,7 +18,7 @@ export function PageHeader({ title, description, action }: { title: string; desc
 
 export function Panel({ title, children, className = "" }: { title?: string; children: ReactNode; className?: string }) {
   return (
-    <section className={`rounded-card border border-line bg-surface p-5 sm:p-6 ${className}`}>
+    <section className={`min-w-0 rounded-card border border-line bg-surface p-5 sm:p-6 ${className}`}>
       {title && <h2 className="mb-4 text-base font-semibold tracking-tight">{title}</h2>}
       {children}
     </section>
@@ -25,7 +26,8 @@ export function Panel({ title, children, className = "" }: { title?: string; chi
 }
 
 /** Shows the error passed back by a row action via ?error=. */
-export function ErrorBanner({ message }: { message?: string }) {
+export function ErrorBanner({ message: code }: { message?: string }) {
+  const message = messageForCode(code);
   if (!message) return null;
   return (
     <p role="alert" className="mb-6 rounded-control bg-red-50 px-4 py-3 text-sm text-red-700">

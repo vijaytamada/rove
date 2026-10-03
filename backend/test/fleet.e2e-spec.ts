@@ -274,6 +274,30 @@ describe('Cities, stations and fleet (e2e)', () => {
       expect(full.body.code).toBe('STATION_FULL');
     });
 
+    it('never exceeds capacity when many requests race for the last slots', async () => {
+      const small = await t.makeStation(city.id, { capacity: 3 });
+      const results = await Promise.all(
+        Array.from({ length: 12 }, () =>
+          t.http().post('/api/v1/vehicles').set(manager).send({ modelId: model.id, stationId: small.id, code: code() }),
+        ),
+      );
+      const statuses = results.map((r) => r.status);
+      expect(statuses.filter((s) => s === 201)).toHaveLength(3);
+      expect(statuses.filter((s) => s === 409)).toHaveLength(9);
+      expect(await t.prisma.vehicle.count({ where: { stationId: small.id } })).toBe(3);
+    });
+
+    it('never exceeds capacity when scooters are moved in parallel', async () => {
+      const target = await t.makeStation(city.id, { capacity: 2 });
+      const movers = await Promise.all(Array.from({ length: 6 }, () => t.makeVehicle(s2.id, model.id)));
+      const results = await Promise.all(
+        movers.map((v) => t.http().patch(`/api/v1/vehicles/${v.id}`).set(manager).send({ stationId: target.id })),
+      );
+      expect(results.filter((r) => r.status === 200)).toHaveLength(2);
+      expect(results.filter((r) => r.status === 409)).toHaveLength(4);
+      expect(await t.prisma.vehicle.count({ where: { stationId: target.id } })).toBe(2);
+    });
+
     it('updates details and moves a vehicle between stations the manager can manage', async () => {
       const v = await t.makeVehicle(s2.id, model.id);
       const updated = await t.http().patch(`/api/v1/vehicles/${v.id}`).set(manager).send({ batteryPercent: 55, odometerKm: 120.5 }).expect(200);

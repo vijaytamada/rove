@@ -64,6 +64,23 @@ void main() {
     expect(env.auth.status, AuthStatus.signedOut);
   });
 
+  testWidgets('shows a retry screen instead of sign-in when the server is unreachable, then recovers', (tester) async {
+    var down = true;
+    final env = TestEnv((r) async => down ? throw Exception('offline') : json(200, userJson()));
+    env.tokens
+      ..access = 'a'
+      ..refresh = 'r';
+    await pumpApp(tester, env);
+
+    expect(find.textContaining("Can't reach Rove"), findsOneWidget);
+    expect(find.text('Welcome back'), findsNothing);
+
+    down = false;
+    await tester.tap(find.text('Try again'));
+    await tester.pumpAndSettle();
+    expect(find.text('Hi, Asha'), findsOneWidget);
+  });
+
   testWidgets('registers a new account', (tester) async {
     final env = TestEnv((r) async => authOk(user: userJson(name: 'Ravi Shah')));
     await pumpApp(tester, env);

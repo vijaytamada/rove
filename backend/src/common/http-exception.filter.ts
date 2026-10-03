@@ -7,6 +7,7 @@ import {
   Logger,
 } from '@nestjs/common';
 import type { Response } from 'express';
+import { AppException } from './app-exception.js';
 
 const DEFAULT_CODES: Record<number, string> = {
   400: 'BAD_REQUEST',
@@ -14,8 +15,16 @@ const DEFAULT_CODES: Record<number, string> = {
   403: 'FORBIDDEN',
   404: 'NOT_FOUND',
   409: 'CONFLICT',
+  413: 'PAYLOAD_TOO_LARGE',
   429: 'TOO_MANY_REQUESTS',
 };
+
+/** Errors thrown by Express middleware (body-parser) carry a 4xx `status` but are not HttpExceptions. */
+function clientErrorStatus(e: unknown): number | undefined {
+  if (typeof e !== 'object' || e === null) return undefined;
+  const status = (e as { status?: unknown; statusCode?: unknown }).status ?? (e as { statusCode?: unknown }).statusCode;
+  return typeof status === 'number' && status >= 400 && status < 500 ? status : undefined;
+}
 
 /** Uniform error body: { statusCode, code, message, details? }. */
 @Catch()
@@ -26,6 +35,18 @@ export class HttpExceptionFilter implements ExceptionFilter {
     const res = host.switchToHttp().getResponse<Response>();
 
     if (!(exception instanceof HttpException)) {
+      const status = clientErrorStatus(exception);
+      if (status) {
+        const type = (exception as { type?: string }).type;
+        const message =
+          type === 'entity.too.large'
+            ? 'The request is too large.'
+            : type === 'entity.parse.failed'
+              ? 'The request body is not valid JSON.'
+              : 'The request could not be processed.';
+        res.status(status).json({ statusCode: status, code: DEFAULT_CODES[status] ?? 'BAD_REQUEST', message });
+        return;
+      }
       this.logger.error(exception instanceof Error ? (exception.stack ?? exception.message) : String(exception));
       res.status(HttpStatus.INTERNAL_SERVER_ERROR).json({
         statusCode: 500,
@@ -53,6 +74,11 @@ export class HttpExceptionFilter implements ExceptionFilter {
         message = b.message;
       }
       if (b.details !== undefined) details = b.details;
+    }
+
+    // The JSON body parser reports syntax errors as a plain BadRequest with raw parser text.
+    if (status === 400 && !(exception instanceof AppException) && /\bJSON\b/.test(message)) {
+      message = 'The request body is not valid JSON.';
     }
 
     res.status(status).json({ statusCode: status, code, message, ...(details !== undefined && { details }) });

@@ -31,7 +31,7 @@ async function submit(
 /** Button actions: call the API; on failure return to the page with an error message. */
 async function click(method: Method, path: string, body: unknown, page: string): Promise<void> {
   const res = await apiRequest(path, { method, body, token: await token() });
-  if (!res.ok) redirect(`${page}?error=${encodeURIComponent(res.message)}`);
+  if (!res.ok) redirect(`${page}?error=${encodeURIComponent(res.code)}`);
   revalidatePath(page);
 }
 
