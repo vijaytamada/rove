@@ -60,5 +60,7 @@ These are the simplest reasonable defaults so Phases 4–6 can proceed; confirm 
 | 2026-10-03 | `StaffAssignment` city/station ids have no FK until Phase 3 | Tables don't exist yet |
 | 2026-10-03 | Vitest uses a small TypeScript-compiler plugin for decorator metadata instead of SWC | SWC native binary blocked by Windows folder ACLs |
 
+| 2026-10-03 | Website is a responsive desktop-first website for all roles (supersedes the earlier "phone-style column" direction); Flutter is a separate customer app sharing API, tokens and screen specs | Staff/admin need a real website; app is a different product |
+
 ## 8. Open questions
 See the end of the planning summary / `docs/PHASES.md` §Open decisions. Resolve before the phase noted.

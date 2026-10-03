@@ -28,7 +28,7 @@ Update this line whenever a phase completes.
 `backend/` NestJS API · `frontend/` Next.js · `flutter/` mobile · `infra/` docker compose · `docs/` plan & design docs · `.ai-context/` this file.
 
 ## UI direction
-**Modern, minimal, simple, clean.** Customer web is a mobile-first, app-like PWA (single responsive codebase, app bar + bottom tabs, bottom sheets, sticky CTA; centered column on desktop) — the way Flipkart keeps web and mobile consistent: same API, same design tokens, same screen specs and component names as the future Flutter app. Neutral palette + one green accent, near-black primary buttons, lots of whitespace. Tailwind + shadcn/ui. Staff/admin console is a separate desktop-oriented route group (employee pickup/return stays mobile/tablet-friendly). Clients never compute money. Full guide: `docs/UI.md`.
+**Modern, minimal, simple, clean.** The website is a responsive website (desktop top navigation + wide layouts; phones get a compact header and bottom tabs) used by customers, station employees, city managers and admins; staff/admin use a sidebar console. The Flutter app is a separate native customer app. Both share the backend API, the design tokens and the screen specs, but are not pixel copies. Neutral palette + one green accent, near-black primary buttons, lots of whitespace. Tailwind. Clients never compute money. Full guide: `docs/UI.md`.
 
 ## Development rules
 1. Build phase by phase. Do **not** implement future-phase features early.

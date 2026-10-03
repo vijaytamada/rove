@@ -6,18 +6,23 @@ Working name: **Rove**. Wordmark: lowercase `rove` in Inter 600, near-black, wit
 ## 1. Goal
 **Modern, minimal, simple, clean.** One consistent product experience on web and mobile.
 
-## 2. How web and mobile stay the same (the Flipkart approach, not its look)
-Flipkart's mobile web ("Flipkart Lite") is a mobile-first **PWA**: the website *is* an app-like experience, built on the same backend APIs and the same design language as the native apps. We use the same ideas:
+## 2. Web and mobile: one product, two interfaces
+**Revised 2026-10-03.** The website is a real, responsive website used by customers, station employees, city managers and admins. The Flutter app is a separate, native customer app. They are not pixel copies; they share the backend, the design language and the screen specs.
 
-| Idea | What we do |
-|---|---|
-| **Mobile-first, single responsive codebase** | Customer web is designed at 360–430 px first; desktop shows the same app in a centered column (max ~480 px). No separate desktop customer design. Wide screens may use a 2–3 column grid on browse screens only. |
-| **App-shell + PWA** | Fixed top bar and bottom tab bar, content in between; web manifest, icons, installable ("Add to Home Screen"), fast loads, skeletons. Offline/service-worker is optional, not an MVP need. |
-| **One backend, one API contract** | Web and Flutter call the same REST API (`/api/v1`, OpenAPI). Business rules live only in the backend. Neither client calculates prices; both display the backend's quote. |
-| **One design language** | Shared **design tokens** (below) + shared **component names and screen specs**. Flutter re-implements the same screens later; it doesn't redesign them. |
-| **One screen spec** | Each screen is defined once (screen inventory below). Web is built first; the web screens become the spec for Flutter. |
+| Topic | Website (Next.js) | Mobile app (Flutter) |
+|---|---|---|
+| Users | Customers, station employees, city managers, super admins | Customers (staff may sign in; staff tools stay on the website) |
+| Layout | Responsive. Desktop: top navigation, wide content (max 6xl), split-screen sign-in. Phones: compact header + bottom tabs | Native phone UI: app bar, bottom navigation, sheets |
+| Staff/admin | Console layout: sidebar on desktop, top bar with links on phones | Not in the app |
+| Install | Optional PWA (manifest) | App store build |
 
-Staff/admin console is a separate desktop-oriented route group. The station-employee pickup/return screens stay mobile/tablet-friendly.
+What stays shared:
+- **One backend and API contract** (`/api/v1`). Neither client calculates prices; both display backend values.
+- **One design language:** the same tokens (section 3), type, spacing and tone, so they feel like the same brand.
+- **One screen spec:** customer screens are defined once (section 6). Each client implements them in its own native way; the website is built first, Flutter follows the same flows.
+- **Same component names** where a component exists in both (`ScooterCard`, `BookingCard`, `StatusChip`, `PriceBreakdown`).
+
+Web layout groups: `(site)` public + customer pages (header, footer, bottom tabs on phones), `(auth)` sign-in/register (split screen), `(console)` staff and admin (sidebar).
 
 ## 3. Visual style: modern minimal
 - **Whitespace first.** Generous padding, one idea per screen, few borders. Separate by space, not lines.

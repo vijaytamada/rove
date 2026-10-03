@@ -21,8 +21,8 @@ npm run lint
 
 ## Layout
 - `src/app` routes, `manifest.ts` (PWA), `icon.svg`
-- `src/components/app` shared app components (`AppShell`, `AppBar`, `BottomNav`, `StatusChip`) — names match the future Flutter widgets
+- `src/components/app` shared form/UI pieces (`TextField`, `SubmitButton`, `StatusChip`, `ButtonLink`, `Wordmark`); `src/components/site` shells (`SiteShell`, `ConsoleShell`, header, nav)
 - `src/styles/tokens.css` design tokens (source of truth with `docs/UI.md`)
 - `src/lib/config.ts` `APP_NAME` + `API_URL`; `src/lib/api.ts` API client
 
-Planned route groups: `(public)`, `(customer)`, `(staff)`, `(admin)`.
+Route groups: `(site)` public + customer pages, `(auth)` sign-in/register, `(console)` staff and admin (see `docs/UI.md`).
