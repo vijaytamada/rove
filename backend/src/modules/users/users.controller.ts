@@ -29,30 +29,31 @@ export class UsersController {
     return this.users.getView(user.id);
   }
 
-  // ---- User administration (super admin only in Phase 2) ----
-  // City managers creating employees for their own cities arrives with stations in Phase 3.
+  // ---- Staff administration ----
+  // Super admins manage everyone. City managers manage the station employees of their own cities
+  // (the service enforces this); station employees and customers have no access.
 
   @Post('users')
-  @Roles('SUPER_ADMIN')
-  async createStaff(@Body() dto: CreateStaffDto) {
-    const user = await this.users.createStaff(dto);
+  @Roles('SUPER_ADMIN', 'CITY_MANAGER')
+  async createStaff(@CurrentUser() actor: AuthUser, @Body() dto: CreateStaffDto) {
+    const user = await this.users.createStaff(actor, dto);
     return this.users.getView(user.id);
   }
 
   @Get('users')
-  @Roles('SUPER_ADMIN')
-  list(@Query() query: ListUsersQuery) {
-    return this.users.list(query);
+  @Roles('SUPER_ADMIN', 'CITY_MANAGER')
+  list(@CurrentUser() actor: AuthUser, @Query() query: ListUsersQuery) {
+    return this.users.list(actor, query);
   }
 
   @Get('users/:id')
-  @Roles('SUPER_ADMIN')
-  get(@Param('id', ParseUUIDPipe) id: string) {
-    return this.users.getView(id);
+  @Roles('SUPER_ADMIN', 'CITY_MANAGER')
+  get(@CurrentUser() actor: AuthUser, @Param('id', ParseUUIDPipe) id: string) {
+    return this.users.getForActor(actor, id);
   }
 
   @Patch('users/:id')
-  @Roles('SUPER_ADMIN')
+  @Roles('SUPER_ADMIN', 'CITY_MANAGER')
   async update(
     @CurrentUser() actor: AuthUser,
     @Param('id', ParseUUIDPipe) id: string,
@@ -62,8 +63,12 @@ export class UsersController {
   }
 
   @Put('users/:id/assignments')
-  @Roles('SUPER_ADMIN')
-  setAssignments(@Param('id', ParseUUIDPipe) id: string, @Body() dto: SetAssignmentsDto) {
-    return this.users.setAssignments(id, dto.assignments);
+  @Roles('SUPER_ADMIN', 'CITY_MANAGER')
+  setAssignments(
+    @CurrentUser() actor: AuthUser,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: SetAssignmentsDto,
+  ) {
+    return this.users.setAssignments(actor, id, dto.assignments);
   }
 }

@@ -1,7 +1,7 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { AppException } from '../../common/app-exception.js';
 import type { AuthUser } from '../../common/auth.decorators.js';
-import { Prisma, Role, UserStatus, type User } from '../../generated/prisma/client.js';
+import { Prisma, Role, UserStatus, type StaffAssignment, type User } from '../../generated/prisma/client.js';
 import { PrismaService } from '../../infra/prisma/prisma.service.js';
 import { ScopeService, type StaffScope } from '../rbac/scope.service.js';
 import type { AssignmentDto, CreateStaffDto, ListUsersQuery, UpdateMeDto, UpdateUserDto } from './dto/user.dto.js';
@@ -59,6 +59,8 @@ export function validateAssignments(role: Role, items: AssignmentDto[]): Assignm
   });
 }
 
+type UserWithAssignments = User & { assignments: StaffAssignment[] };
+
 @Injectable()
 export class UsersService {
   constructor(
@@ -83,6 +85,7 @@ export class UsersService {
     return toUserView(user, scope);
   }
 
+  /** Creates a user. Callers are responsible for authorizing `assignments` (see createStaff). */
   async create(input: {
     email: string;
     password: string;
@@ -112,11 +115,30 @@ export class UsersService {
     }
   }
 
-  createStaff(dto: CreateStaffDto): Promise<User> {
+  /**
+   * Super admins create any staff role. City managers create station employees only, assigned to
+   * stations inside their own cities.
+   */
+  async createStaff(actor: AuthUser, dto: CreateStaffDto): Promise<User> {
     if (dto.role === 'CUSTOMER') {
       throw new AppException(400, 'INVALID_ROLE', 'Use registration to create customer accounts.');
     }
-    return this.create(dto);
+    if (actor.role === 'CITY_MANAGER' && dto.role !== 'STATION_EMPLOYEE') {
+      throw new AppException(403, 'FORBIDDEN_ROLE', 'City managers can only create station employees.');
+    }
+    const assignments = validateAssignments(dto.role, dto.assignments ?? []);
+    if (actor.role === 'CITY_MANAGER' && assignments.length === 0) {
+      throw new AppException(400, 'INVALID_ASSIGNMENT', 'Assign the employee to at least one station.');
+    }
+    await this.assertAssignmentTargets(actor, assignments);
+    return this.create({
+      email: dto.email,
+      password: dto.password,
+      fullName: dto.fullName,
+      phone: dto.phone,
+      role: dto.role,
+      assignments,
+    });
   }
 
   async updateMe(id: string, dto: UpdateMeDto): Promise<User> {
@@ -138,24 +160,52 @@ export class UsersService {
     }
   }
 
-  async list(query: ListUsersQuery) {
+  /** Super admins see everyone; city managers see the station employees of their cities. */
+  async list(actor: AuthUser, query: ListUsersQuery) {
     const page = query.page ?? 1;
     const limit = query.limit ?? 20;
-    const where: Prisma.UserWhereInput = query.role ? { role: query.role } : {};
+    const where: Prisma.UserWhereInput = {};
+
+    if (actor.role === 'CITY_MANAGER') {
+      const scope = await this.scopes.getScope(actor);
+      where.role = 'STATION_EMPLOYEE';
+      where.assignments = { some: { station: { cityId: { in: scope.cityIds } } } };
+      if (query.role && query.role !== 'STATION_EMPLOYEE') where.role = query.role; // yields no rows
+    } else if (query.role) {
+      where.role = query.role;
+    }
+
     const [items, total] = await this.prisma.$transaction([
       this.prisma.user.findMany({
         where,
         orderBy: { createdAt: 'desc' },
         skip: (page - 1) * limit,
         take: limit,
+        include: { assignments: true },
       }),
       this.prisma.user.count({ where }),
     ]);
-    return { items: items.map((u) => toUserView(u)), total, page, limit };
+    return {
+      items: items.map((u) =>
+        toUserView(u, {
+          unrestricted: false,
+          cityIds: u.assignments.flatMap((a) => (a.cityId ? [a.cityId] : [])),
+          stationIds: u.assignments.flatMap((a) => (a.stationId ? [a.stationId] : [])),
+        }),
+      ),
+      total,
+      page,
+      limit,
+    };
+  }
+
+  async getForActor(actor: AuthUser, id: string): Promise<UserView> {
+    await this.assertCanManage(actor, await this.loadWithAssignments(id));
+    return this.getView(id);
   }
 
   async adminUpdate(actor: AuthUser, id: string, dto: UpdateUserDto): Promise<User> {
-    await this.getById(id);
+    await this.assertCanManage(actor, await this.loadWithAssignments(id));
     if (dto.status === 'DISABLED' && id === actor.id) {
       throw new AppException(400, 'CANNOT_DISABLE_SELF', "You can't disable your own account.");
     }
@@ -180,9 +230,14 @@ export class UsersService {
     return user;
   }
 
-  async setAssignments(id: string, items: AssignmentDto[]): Promise<UserView> {
-    const user = await this.getById(id);
+  async setAssignments(actor: AuthUser, id: string, items: AssignmentDto[]): Promise<UserView> {
+    const user = await this.loadWithAssignments(id);
+    await this.assertCanManage(actor, user);
     const assignments = validateAssignments(user.role, items);
+    if (actor.role === 'CITY_MANAGER' && assignments.length === 0) {
+      throw new AppException(400, 'INVALID_ASSIGNMENT', 'Assign the employee to at least one station.');
+    }
+    await this.assertAssignmentTargets(actor, assignments);
     await this.prisma.$transaction([
       this.prisma.staffAssignment.deleteMany({ where: { userId: id } }),
       this.prisma.staffAssignment.createMany({
@@ -194,6 +249,56 @@ export class UsersService {
 
   async markPhoneVerified(id: string): Promise<void> {
     await this.prisma.user.update({ where: { id }, data: { phoneVerifiedAt: new Date() } });
+  }
+
+  private async loadWithAssignments(id: string): Promise<UserWithAssignments> {
+    const user = await this.prisma.user.findUnique({ where: { id }, include: { assignments: true } });
+    if (!user) throw new AppException(404, 'USER_NOT_FOUND', 'User not found.');
+    return user;
+  }
+
+  /**
+   * Super admins manage everyone. City managers manage station employees only, and only when every
+   * station the employee is assigned to is inside the manager's cities.
+   */
+  private async assertCanManage(actor: AuthUser, target: UserWithAssignments): Promise<void> {
+    if (actor.role === 'SUPER_ADMIN') return;
+    const denied = new AppException(403, 'FORBIDDEN_SCOPE', "You can't manage this user.");
+    if (actor.role !== 'CITY_MANAGER' || target.role !== 'STATION_EMPLOYEE') throw denied;
+
+    const stationIds = target.assignments.flatMap((a) => (a.stationId ? [a.stationId] : []));
+    if (stationIds.length === 0) throw denied;
+    const [scope, stations] = await Promise.all([
+      this.scopes.getScope(actor),
+      this.prisma.station.findMany({ where: { id: { in: stationIds } }, select: { cityId: true } }),
+    ]);
+    if (!stations.every((s) => scope.cityIds.includes(s.cityId))) throw denied;
+  }
+
+  /** Cities/stations must exist, and managers may only assign stations inside their own cities. */
+  private async assertAssignmentTargets(actor: AuthUser, items: AssignmentDto[]): Promise<void> {
+    const cityIds = items.flatMap((i) => (i.cityId ? [i.cityId] : []));
+    const stationIds = items.flatMap((i) => (i.stationId ? [i.stationId] : []));
+
+    if (cityIds.length) {
+      const found = await this.prisma.city.count({ where: { id: { in: cityIds } } });
+      if (found !== cityIds.length) throw new AppException(400, 'UNKNOWN_CITY', 'One of the cities does not exist.');
+    }
+    if (stationIds.length) {
+      const stations = await this.prisma.station.findMany({
+        where: { id: { in: stationIds } },
+        select: { id: true, cityId: true },
+      });
+      if (stations.length !== stationIds.length) {
+        throw new AppException(400, 'UNKNOWN_STATION', 'One of the stations does not exist.');
+      }
+      if (actor.role === 'CITY_MANAGER') {
+        const scope = await this.scopes.getScope(actor);
+        if (!stations.every((s) => scope.cityIds.includes(s.cityId))) {
+          throw new AppException(403, 'FORBIDDEN_SCOPE', "You can only assign stations in your own cities.");
+        }
+      }
+    }
   }
 
   private async assertUnique(input: { email?: string; phone?: string; excludeId?: string }) {

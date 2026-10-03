@@ -51,6 +51,28 @@ export class ScopeService {
     throw this.denied();
   }
 
+  /** Loads the station (404 if missing) and checks access, resolving its city for managers. */
+  async assertStationIdAccess(user: AuthUser, stationId: string): Promise<{ id: string; cityId: string }> {
+    const station = await this.prisma.station.findUnique({
+      where: { id: stationId },
+      select: { id: true, cityId: true },
+    });
+    if (!station) throw new AppException(404, 'STATION_NOT_FOUND', 'Station not found.');
+    await this.assertStationAccess(user, { stationId: station.id, cityId: station.cityId });
+    return station;
+  }
+
+  /**
+   * Prisma filter limiting stations to what the user may see/manage; `undefined` means no limit.
+   * Managers see every station in their cities; employees only their own stations.
+   */
+  async stationFilter(user: AuthUser): Promise<{ cityId?: { in: string[] }; id?: { in: string[] } } | undefined> {
+    const scope = await this.getScope(user);
+    if (scope.unrestricted) return undefined;
+    if (user.role === 'CITY_MANAGER') return { cityId: { in: scope.cityIds } };
+    return { id: { in: scope.stationIds } };
+  }
+
   private denied() {
     return new AppException(403, 'FORBIDDEN_SCOPE', "You don't have access to this city or station.");
   }

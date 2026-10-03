@@ -1,25 +1,19 @@
 import { randomUUID } from 'node:crypto';
-import { createTestApp, TEST_PASSWORD, type TestApp } from './helpers.js';
+import { createTestApp, TEST_PASSWORD, type Auth, type TestApp } from './helpers.js';
 
-describe('RBAC (e2e)', () => {
+describe('RBAC and staff management (e2e)', () => {
   let t: TestApp;
-  let adminAuth: { Authorization: string };
+  let adminAuth: Auth;
 
   beforeAll(async () => {
     t = await createTestApp();
-    const admin = await t.createUser('SUPER_ADMIN');
-    adminAuth = { Authorization: `Bearer ${(await t.login(admin.email)).accessToken}` };
+    adminAuth = (await t.asRole('SUPER_ADMIN')).auth;
   });
   afterAll(() => t.cleanup());
 
-  const asRole = async (role: 'CUSTOMER' | 'CITY_MANAGER' | 'STATION_EMPLOYEE') => {
-    const u = await t.createUser(role);
-    return { ...u, auth: { Authorization: `Bearer ${(await t.login(u.email)).accessToken}` } };
-  };
-
   describe('role checks', () => {
-    it.each(['CUSTOMER', 'CITY_MANAGER', 'STATION_EMPLOYEE'] as const)('%s cannot use user administration', async (role) => {
-      const u = await asRole(role);
+    it.each(['CUSTOMER', 'STATION_EMPLOYEE'] as const)('%s cannot use user administration', async (role) => {
+      const u = await t.asRole(role);
       const list = await t.http().get('/api/v1/users').set(u.auth).expect(403);
       expect(list.body.code).toBe('FORBIDDEN_ROLE');
       await t.http().post('/api/v1/users').set(u.auth).send({}).expect(403);
@@ -37,10 +31,10 @@ describe('RBAC (e2e)', () => {
     });
   });
 
-  describe('creating staff', () => {
+  describe('super admin creating staff', () => {
     it('creates a city manager with city assignments and exposes scope on /me', async () => {
-      const cityA = randomUUID();
-      const cityB = randomUUID();
+      const cityA = await t.makeCity();
+      const cityB = await t.makeCity();
       const email = t.email('mgr');
       const created = await t
         .http()
@@ -51,21 +45,22 @@ describe('RBAC (e2e)', () => {
           password: TEST_PASSWORD,
           fullName: 'City Mgr',
           role: 'CITY_MANAGER',
-          assignments: [{ cityId: cityA }, { cityId: cityB }, { cityId: cityA }],
+          assignments: [{ cityId: cityA.id }, { cityId: cityB.id }, { cityId: cityA.id }],
         })
         .expect(201);
       expect(created.body.role).toBe('CITY_MANAGER');
-      expect(created.body.scope.cityIds.sort()).toEqual([cityA, cityB].sort());
+      expect(created.body.scope.cityIds.sort()).toEqual([cityA.id, cityB.id].sort());
 
       const { accessToken } = await t.login(email);
       const me = await t.http().get('/api/v1/me').set('Authorization', `Bearer ${accessToken}`).expect(200);
-      expect(me.body.scope.cityIds.sort()).toEqual([cityA, cityB].sort());
+      expect(me.body.scope.cityIds.sort()).toEqual([cityA.id, cityB.id].sort());
       expect(me.body.scope.stationIds).toEqual([]);
     });
 
     it('creates a station employee and replaces assignments', async () => {
-      const stationA = randomUUID();
-      const stationB = randomUUID();
+      const city = await t.makeCity();
+      const stationA = await t.makeStation(city.id);
+      const stationB = await t.makeStation(city.id);
       const created = await t
         .http()
         .post('/api/v1/users')
@@ -75,16 +70,16 @@ describe('RBAC (e2e)', () => {
           password: TEST_PASSWORD,
           fullName: 'Employee',
           role: 'STATION_EMPLOYEE',
-          assignments: [{ stationId: stationA }],
+          assignments: [{ stationId: stationA.id }],
         })
         .expect(201);
       const updated = await t
         .http()
         .put(`/api/v1/users/${created.body.id}/assignments`)
         .set(adminAuth)
-        .send({ assignments: [{ stationId: stationB }] })
+        .send({ assignments: [{ stationId: stationB.id }] })
         .expect(200);
-      expect(updated.body.scope).toEqual({ cityIds: [], stationIds: [stationB] });
+      expect(updated.body.scope).toEqual({ cityIds: [], stationIds: [stationB.id] });
     });
 
     it('rejects assignments that do not fit the role', async () => {
@@ -108,6 +103,20 @@ describe('RBAC (e2e)', () => {
         .expect(400);
     });
 
+    it('rejects assignments to cities and stations that do not exist', async () => {
+      const body = { email: t.email('ghost'), password: TEST_PASSWORD, fullName: 'Ghost' };
+      const city = await t
+        .http().post('/api/v1/users').set(adminAuth)
+        .send({ ...body, role: 'CITY_MANAGER', assignments: [{ cityId: randomUUID() }] })
+        .expect(400);
+      expect(city.body.code).toBe('UNKNOWN_CITY');
+      const station = await t
+        .http().post('/api/v1/users').set(adminAuth)
+        .send({ ...body, email: t.email('ghost2'), role: 'STATION_EMPLOYEE', assignments: [{ stationId: randomUUID() }] })
+        .expect(400);
+      expect(station.body.code).toBe('UNKNOWN_STATION');
+    });
+
     it('does not create customers through the staff endpoint', async () => {
       const res = await t
         .http()
@@ -116,6 +125,95 @@ describe('RBAC (e2e)', () => {
         .send({ email: t.email('cust'), password: TEST_PASSWORD, fullName: 'C', role: 'CUSTOMER' })
         .expect(400);
       expect(res.body.code).toBe('INVALID_ROLE');
+    });
+  });
+
+  describe('city managers managing employees in their own cities', () => {
+    let cityA: { id: string };
+    let cityB: { id: string };
+    let stationA: { id: string };
+    let stationA2: { id: string };
+    let stationB: { id: string };
+    let manager: Auth;
+
+    beforeAll(async () => {
+      cityA = await t.makeCity();
+      cityB = await t.makeCity();
+      stationA = await t.makeStation(cityA.id);
+      stationA2 = await t.makeStation(cityA.id);
+      stationB = await t.makeStation(cityB.id);
+      manager = (await t.asRole('CITY_MANAGER', { cityIds: [cityA.id] })).auth;
+    });
+
+    const employee = (assignments: unknown[], extra: Record<string, unknown> = {}) => ({
+      email: t.email('emp'),
+      password: TEST_PASSWORD,
+      fullName: 'Employee',
+      role: 'STATION_EMPLOYEE',
+      assignments,
+      ...extra,
+    });
+
+    it('can create an employee for a station in their city', async () => {
+      const res = await t.http().post('/api/v1/users').set(manager).send(employee([{ stationId: stationA.id }])).expect(201);
+      expect(res.body.role).toBe('STATION_EMPLOYEE');
+      expect(res.body.scope.stationIds).toEqual([stationA.id]);
+    });
+
+    it("cannot assign a station in another manager's city", async () => {
+      const res = await t.http().post('/api/v1/users').set(manager).send(employee([{ stationId: stationB.id }])).expect(403);
+      expect(res.body.code).toBe('FORBIDDEN_SCOPE');
+    });
+
+    it('needs at least one station, and cannot create other roles', async () => {
+      const none = await t.http().post('/api/v1/users').set(manager).send(employee([])).expect(400);
+      expect(none.body.code).toBe('INVALID_ASSIGNMENT');
+      const mgr = await t
+        .http().post('/api/v1/users').set(manager)
+        .send(employee([{ cityId: cityA.id }], { role: 'CITY_MANAGER' }))
+        .expect(403);
+      expect(mgr.body.code).toBe('FORBIDDEN_ROLE');
+      await t.http().post('/api/v1/users').set(manager).send(employee([], { role: 'SUPER_ADMIN' })).expect(403);
+    });
+
+    it('lists only employees working in their cities', async () => {
+      const inCity = await t.createUser('STATION_EMPLOYEE', { stationIds: [stationA2.id] });
+      const elsewhere = await t.createUser('STATION_EMPLOYEE', { stationIds: [stationB.id] });
+      const res = await t.http().get('/api/v1/users?limit=100').set(manager).expect(200);
+      const ids = res.body.items.map((u: { id: string }) => u.id);
+      expect(ids).toContain(inCity.id);
+      expect(ids).not.toContain(elsewhere.id);
+      expect(res.body.items.every((u: { role: string }) => u.role === 'STATION_EMPLOYEE')).toBe(true);
+    });
+
+    it('can update an employee of their city, but not one of another city or a non-employee', async () => {
+      const mine = await t.createUser('STATION_EMPLOYEE', { stationIds: [stationA.id] });
+      const theirs = await t.createUser('STATION_EMPLOYEE', { stationIds: [stationB.id] });
+      const customer = await t.createUser('CUSTOMER');
+
+      await t.http().patch(`/api/v1/users/${mine.id}`).set(manager).send({ fullName: 'Renamed' }).expect(200);
+      const denied = await t.http().patch(`/api/v1/users/${theirs.id}`).set(manager).send({ status: 'DISABLED' }).expect(403);
+      expect(denied.body.code).toBe('FORBIDDEN_SCOPE');
+      await t.http().get(`/api/v1/users/${theirs.id}`).set(manager).expect(403);
+      await t.http().patch(`/api/v1/users/${customer.id}`).set(manager).send({ status: 'DISABLED' }).expect(403);
+    });
+
+    it('can move an employee between stations of their city only', async () => {
+      const mine = await t.createUser('STATION_EMPLOYEE', { stationIds: [stationA.id] });
+      const ok = await t
+        .http().put(`/api/v1/users/${mine.id}/assignments`).set(manager)
+        .send({ assignments: [{ stationId: stationA2.id }] })
+        .expect(200);
+      expect(ok.body.scope.stationIds).toEqual([stationA2.id]);
+
+      await t
+        .http().put(`/api/v1/users/${mine.id}/assignments`).set(manager)
+        .send({ assignments: [{ stationId: stationB.id }] })
+        .expect(403);
+      await t
+        .http().put(`/api/v1/users/${mine.id}/assignments`).set(manager)
+        .send({ assignments: [] })
+        .expect(400);
     });
   });
 

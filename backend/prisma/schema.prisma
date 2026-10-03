@@ -17,6 +17,24 @@ enum Role {
   CUSTOMER
 }
 
+enum VehicleType {
+  SCOOTER
+  // BIKE, CAR later. Type-specific attributes belong on VehicleModel, not Vehicle.
+}
+
+enum StationStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum VehicleStatus {
+  AVAILABLE
+  RESERVED
+  IN_RIDE
+  MAINTENANCE
+  OFFLINE
+}
+
 enum UserStatus {
   ACTIVE
   DISABLED
@@ -55,7 +73,6 @@ model RefreshToken {
 }
 
 // Defines staff scope. Exactly one of cityId / stationId is set (CHECK constraint in migration).
-// cityId/stationId are plain UUIDs for now; Phase 3 adds the City/Station tables and foreign keys.
 model StaffAssignment {
   id        String   @id @default(uuid()) @db.Uuid
   userId    String   @db.Uuid
@@ -63,9 +80,92 @@ model StaffAssignment {
   stationId String?  @db.Uuid
   createdAt DateTime @default(now())
 
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  city    City?    @relation(fields: [cityId], references: [id], onDelete: Restrict)
+  station Station? @relation(fields: [stationId], references: [id], onDelete: Restrict)
 
   @@unique([userId, cityId])
   @@unique([userId, stationId])
   @@index([userId])
+  @@index([cityId])
+  @@index([stationId])
+}
+
+model City {
+  id        String   @id @default(uuid()) @db.Uuid
+  name      String
+  state     String
+  // IANA time zone, used for opening hours and (later) late-fee day boundaries.
+  timezone  String   @default("Asia/Kolkata")
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  stations    Station[]
+  assignments StaffAssignment[]
+
+  @@unique([name, state])
+}
+
+model Station {
+  id        String        @id @default(uuid()) @db.Uuid
+  cityId    String        @db.Uuid
+  name      String
+  address   String
+  latitude  Float
+  longitude Float
+  capacity  Int
+  // Local opening hours as "HH:mm" in the city time zone; both null = always open.
+  opensAt   String?
+  closesAt  String?
+  status    StationStatus @default(ACTIVE)
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+
+  city        City              @relation(fields: [cityId], references: [id], onDelete: Restrict)
+  vehicles    Vehicle[]
+  assignments StaffAssignment[]
+
+  @@unique([cityId, name])
+  @@index([cityId])
+}
+
+model VehicleModel {
+  id                String      @id @default(uuid()) @db.Uuid
+  type              VehicleType @default(SCOOTER)
+  brand             String
+  name              String
+  rangeKm           Int
+  topSpeedKmh       Int
+  batteryCapacityWh Int?
+  isActive          Boolean     @default(true)
+  createdAt         DateTime    @default(now())
+  updatedAt         DateTime    @updatedAt
+
+  vehicles Vehicle[]
+
+  @@unique([brand, name])
+}
+
+model Vehicle {
+  id                 String        @id @default(uuid()) @db.Uuid
+  modelId            String        @db.Uuid
+  // Station the vehicle is currently based at. Null while out on a ride (set by Phase 5).
+  stationId          String?       @db.Uuid
+  // Short internal code painted on the vehicle, e.g. BLR-001.
+  code               String        @unique
+  registrationNumber String?       @unique
+  status             VehicleStatus @default(AVAILABLE)
+  batteryPercent     Int?
+  odometerKm         Float         @default(0)
+  // Set when a vehicle is retired. Retired vehicles are hidden everywhere (soft delete).
+  retiredAt          DateTime?
+  createdAt          DateTime      @default(now())
+  updatedAt          DateTime      @updatedAt
+
+  model   VehicleModel @relation(fields: [modelId], references: [id], onDelete: Restrict)
+  station Station?     @relation(fields: [stationId], references: [id], onDelete: Restrict)
+
+  @@index([stationId, status])
+  @@index([modelId])
 }
