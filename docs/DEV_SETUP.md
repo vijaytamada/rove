@@ -36,6 +36,8 @@ Order matters: **infra → backend → web → emulator → Flutter**.
 
 **Seed users (once, after migrations):** `cd backend && npm run prisma:seed` creates a super admin and a demo customer. Their emails/passwords come from `SEED_*` in `.env` (defaults in `.env.example`: `admin@rove.local`, `customer@rove.local`). Safe to re-run. Cities, stations and staff seeds arrive in Phase 3.
 
+Sign in with the seeded accounts on the website (http://localhost:3000/login) and in the Flutter app.
+
 Mock OTP: verification codes are always `123456` and are logged by the backend. Never enabled in production (the app refuses to start with `OTP_PROVIDER=mock` when `NODE_ENV=production`).
 
 Backend takes ~15–20 s to start. Check it: open `http://localhost:3001/api/v1/health` → `{"status":"ok","checks":{"database":"up","redis":"up"}}`.

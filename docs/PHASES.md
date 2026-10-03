@@ -21,7 +21,7 @@ Each phase ends with a usable increment and a completion checklist. Don't start 
 - **Outcome / done when:** `docker compose up` starts Postgres+Redis; backend boots, `/api/v1/health` OK, Swagger loads; frontend loads and shows backend health; docs quick-start verified from scratch.
 
 ## Phase 2 — Authentication & RBAC
-**Status: complete.** Backend: 21 unit + 31 e2e tests. Web: login, register, profile (with mock phone verification), role-aware routes. Decisions and API details: `docs/API.md`, `docs/RBAC.md`, `docs/PROJECT_PLAN.md` (Decision Log). Deferred to Phase 3: city managers creating employees in their cities, FKs on assignments, staff seed data.
+**Status: complete.** Backend: 21 unit + 31 e2e tests. Web: responsive website with login, register, profile (mock phone verification), role-aware routes and a staff/admin console layout. Flutter: sign in, register, home, profile with phone verification (27 tests). Decisions and API details: `docs/API.md`, `docs/RBAC.md`, `docs/PROJECT_PLAN.md` (Decision Log). Deferred to Phase 3: city managers creating employees in their cities, FKs on assignments, staff seed data.
 - **Objective:** Identity and permissions foundation.
 - **Features:** register (customer), login, password hashing, JWT access + rotating refresh tokens, logout, `GET/PATCH /me`; roles; guards + decorators; scope model (city/station assignments); `OtpProvider` interface + mock (phone verification); super-admin seed; seed staff users.
 - **Modules:** `Auth`, `Users`, `Rbac` (guards/decorators), `Otp` provider (mock).

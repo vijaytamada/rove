@@ -11,7 +11,7 @@ E-scooters only for now; bikes/cars must stay *possible* but are NOT built.
 
 ## Current phase
 **Phases 1 (Foundation) and 2 (Authentication & RBAC) complete. Next: Phase 3 (Cities, Stations & Fleet).**
-Phase 2 facts: global `JwtAuthGuard` + `RolesGuard` (`@Public()`, `@Roles()`, `@CurrentUser()`), `ScopeService` for city/station scope, opaque rotating refresh tokens, mock OTP behind `OTP_PROVIDER`, uniform error body with stable `code`, seed users via `npm run prisma:seed`. Web auth: httpOnly cookies set by server actions, `src/proxy.ts` refreshes tokens and redirects by role, pages re-check with `requireUser/requireRole` (`src/lib/dal.ts`). `StaffAssignment` city/station ids have no FK until Phase 3 adds those tables.
+Phase 2 facts: global `JwtAuthGuard` + `RolesGuard` (`@Public()`, `@Roles()`, `@CurrentUser()`), `ScopeService` for city/station scope, opaque rotating refresh tokens, mock OTP behind `OTP_PROVIDER`, uniform error body with stable `code`, seed users via `npm run prisma:seed`. Flutter auth (sign in/register/profile/OTP, secure token storage, auto refresh) is done too. Web auth: httpOnly cookies set by server actions, `src/proxy.ts` refreshes tokens and redirects by role, pages re-check with `requireUser/requireRole` (`src/lib/dal.ts`). `StaffAssignment` city/station ids have no FK until Phase 3 adds those tables.
 Foundation facts: NestJS 12 is ESM (`.js` import suffixes, explicit `@Inject()`), Prisma 7 (URL in `prisma.config.ts`, client generated to `backend/src/generated/prisma`), Vitest + oxlint, Next.js 16 (read `frontend/AGENTS.md`), Docker host ports Postgres 5442 / Redis 6389, backend 3001, web 3000. Run commands: `docs/DEV_SETUP.md`.
 Update this line whenever a phase completes.
 
