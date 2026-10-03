@@ -44,8 +44,8 @@ export default async function Home() {
           ) : (
             <>
               <ButtonLink href="/stations">Browse stations</ButtonLink>
-              <ButtonLink href="/register" variant="secondary">
-                Create account
+              <ButtonLink href="/login" variant="secondary">
+                Get started
               </ButtonLink>
             </>
           )}

@@ -1,7 +1,7 @@
 import { cache } from "react";
 import { redirect } from "next/navigation";
 import { apiRequest } from "./api";
-import { homeFor } from "./access";
+import { homeFor, loginPathFor } from "./access";
 import { getAccessToken } from "./session";
 import type { Role, UserView } from "./types";
 
@@ -16,7 +16,7 @@ export const getCurrentUser = cache(async (): Promise<UserView | null> => {
 /** For pages: redirects to sign-in when signed out. */
 export async function requireUser(returnTo: string): Promise<UserView> {
   const user = await getCurrentUser();
-  if (!user) redirect(`/login?next=${encodeURIComponent(returnTo)}`);
+  if (!user) redirect(`${loginPathFor(returnTo)}?next=${encodeURIComponent(returnTo)}`);
   return user;
 }
 

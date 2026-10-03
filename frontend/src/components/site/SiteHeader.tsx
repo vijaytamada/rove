@@ -69,10 +69,10 @@ export function SiteHeader({ user }: { user: UserView | null }) {
               Sign in
             </Link>
             <Link
-              href="/register"
+              href="/login"
               className="hidden rounded-full bg-ink px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-ink/90 sm:block"
             >
-              Create account
+              Get started
             </Link>
           </div>
         )}
