@@ -34,6 +34,9 @@ Customers sign in with phone number + one-time code (`/auth/phone/request|verify
 ## UI direction
 **Modern, minimal, simple, clean.** The website is a responsive website (desktop top navigation + wide layouts; phones get a compact header and bottom tabs) used by customers, station employees, city managers and admins; staff/admin use a sidebar console. The Flutter app is a separate native **customer-only** app; station employees, city managers and admins use the website, and a separate staff app is planned for later (not now). Both share the backend API, the design tokens and the screen specs, but are not pixel copies. Neutral palette + one green accent, near-black primary buttons, lots of whitespace. Tailwind. Clients never compute money. Full guide: `docs/UI.md`.
 
+## Branches
+Two long-lived branches only: `main` (last fully tested, releasable state) and `dev` (day-to-day work). Work and commit on `dev`; merge `dev` into `main` (`--no-ff`) only after the full re-test in `docs/TESTING.md` and when the user asks. No other long-lived branches; delete short-lived ones once merged. No remote is configured yet, so nothing is pushed.
+
 ## Development rules
 1. Build phase by phase. Do **not** implement future-phase features early.
 2. Before changing code: read this file, `docs/PHASES.md`, and inspect the existing repo.
