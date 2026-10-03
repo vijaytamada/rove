@@ -123,4 +123,4 @@ Each phase ends with a usable increment and a completion checklist. Don't start 
 | 11 | KYC/OTP/payment vendors; legal review of Aadhaar use | 9/10 | Decide at phase start |
 | 12 | Staff multi-station / multi-city assignment? | 3 | Yes, via `StaffAssignment` rows |
 | 13 | Languages/i18n, GST invoices | later | English only, no invoices |
-| 14 | Git hosting & branching | 1 | **Resolved (2026-10-04):** two branches, `main` (tested) and `dev` (work); no remote yet. See `docs/DEV_SETUP.md` §9 |
+| 14 | Git hosting & branching | 1 | **Resolved (2026-10-04):** `main` and `dev` kept level; work on `feature/*` branches cut from `dev`; no remote yet. See `docs/DEV_SETUP.md` §9 |

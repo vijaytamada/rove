@@ -91,16 +91,18 @@ Other local projects use 5432/6379, which is why Rove uses 5442/6389. Change via
 | Android Studio device dialog hides the system image | Pixel 10 profile wants API 36+; API 35 images show as "unsupported" there but still work |
 
 ## 9. Branches and workflow
-Two long-lived branches only:
+Two long-lived branches, **kept at the same commit**, plus short-lived feature branches:
 
 | Branch | Purpose |
 |---|---|
-| `main` | Last fully tested, releasable state. Never commit work directly here |
-| `dev` | Day-to-day work. Commit here |
+| `main` | Last fully tested, releasable state. Same commit as `dev` |
+| `dev` | Integration branch. Same commit as `main`; feature branches start here |
+| `feature/<name>` | Where all changes are made. Deleted after merging |
 
-1. `git checkout dev` and work there.
-2. When a piece of work is finished, run the checks in `docs/TESTING.md` (backend tests, website lint + build, Flutter tests + analyze, the three `tools/qa` scripts).
-3. Merge into `main` with a merge commit: `git checkout main`, `git merge --no-ff dev`, then `git checkout dev` again.
-4. Short-lived branches for a risky change are fine; delete them once merged so only `main` and `dev` remain.
+1. Start: `git checkout dev` then `git checkout -b feature/<name>`. Commit code and docs there.
+2. When the feature is stable, run the checks in `docs/TESTING.md` (backend tests, website lint + build, Flutter tests + analyze, the three `tools/qa` scripts).
+3. Merge into `dev`: `git checkout dev`, `git merge --no-ff feature/<name>`.
+4. Bring `main` level: `git checkout main`, `git merge --ff-only dev`, then `git checkout dev`.
+5. `git branch -d feature/<name>`.
 
 No remote is configured yet. To publish, add one (`git remote add origin <url>`) and push both branches (`git push -u origin main dev`).
