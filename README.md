@@ -5,7 +5,7 @@ Modular-monolith NestJS backend, Next.js web, Flutter mobile. Mock integrations 
 
 **Status:** Phases 1-3 complete (auth and roles, cities, stations, fleet, admin console, customer app browsing), plus phone + OTP sign-in for customers. Next: Phase 4 — Booking. See `docs/PHASES.md`.
 
-**Branches:** `main` and `dev` are kept at the same commit; changes are made on `feature/*` branches cut from `dev` and merged once stable (see `docs/DEV_SETUP.md` §9).
+**Branches:** `main` is stable; `dev` collects finished features; changes are made on `feature/*` branches cut from `dev`. `dev` is merged into `main` once a batch of features is stable (see `docs/DEV_SETUP.md` §9).
 
 ## Layout
 | Path | What |

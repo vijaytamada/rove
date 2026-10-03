@@ -73,7 +73,7 @@ These are the simplest reasonable defaults so Phases 4–6 can proceed; confirm 
 | 2026-10-03 | Employees may only flag MAINTENANCE; managers/admins set AVAILABLE/OFFLINE; RESERVED/IN_RIDE are system-controlled | Matches the RBAC matrix and protects bookings |
 | 2026-10-03 | Public station listing shows availability by current status; time-window availability arrives with bookings in Phase 4 | Needs booking data |
 | 2026-10-03 | Demo data uses a fictional vehicle brand (Voltra) | No claims about real products |
-| 2026-10-04 | Git: `main` and `dev` are kept at the same commit; all changes are made on `feature/*` branches cut from `dev`, merged into `dev` (`--no-ff`) and then `main` is fast-forwarded to `dev` once the feature is stable and fully re-tested. Customer sign-in field is India-only (+91 prefix, 10 digits) for now | Simple model; other country codes can be added later |
+| 2026-10-04 | Git: `main` = stable, `dev` = integration (level on 2026-10-04, then `dev` runs ahead); all changes are made on `feature/*` branches cut from `dev` and merged into `dev` (`--no-ff`) when done; `dev` is merged into `main` once several features are stable and the full re-test passes. Customer sign-in field is India-only (+91 prefix, 10 digits) for now | Simple model; other country codes can be added later |
 
 ## 8. Open questions
 See the end of the planning summary / `docs/PHASES.md` §Open decisions. Resolve before the phase noted.
