@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart' show kReleaseMode;
 import 'package:flutter/material.dart';
 
 import '../auth/auth_controller.dart';
+import '../auth/phone.dart';
 import '../models/user.dart';
 import '../theme/tokens.dart';
 import '../widgets/app_text_field.dart';
@@ -39,7 +40,7 @@ class ProfileTab extends StatelessWidget {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(user.fullName, style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
-                        Text(user.email, style: const TextStyle(color: Tokens.inkMuted), overflow: TextOverflow.ellipsis),
+                        Text(user.email ?? formatPhone(user.phone ?? ''), style: const TextStyle(color: Tokens.inkMuted), overflow: TextOverflow.ellipsis),
                         const SizedBox(height: 8),
                         Wrap(spacing: 6, runSpacing: 6, children: [
                           if (user.role != Role.customer) StatusChip(user.role.label),

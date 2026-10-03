@@ -13,6 +13,8 @@ const envSchema = z
     REFRESH_TOKEN_TTL_DAYS: z.coerce.number().int().positive().default(30),
 
     OTP_PROVIDER: z.enum(['mock']).default('mock'),
+    /** Total OTP sends per day across all phones (guards against SMS pumping and runaway cost). */
+    OTP_DAILY_SEND_CAP: z.coerce.number().int().positive().default(5000),
   })
   .superRefine((env, ctx) => {
     if (env.NODE_ENV !== 'production') return;

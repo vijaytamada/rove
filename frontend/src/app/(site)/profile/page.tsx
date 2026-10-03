@@ -2,6 +2,7 @@ import { logout } from "@/app/actions/auth";
 import { StatusChip } from "@/components/app/StatusChip";
 import { SubmitButton } from "@/components/app/SubmitButton";
 import { requireUser } from "@/lib/dal";
+import { formatPhone } from "@/lib/phone";
 import type { Role } from "@/lib/types";
 import { PhoneVerification } from "./PhoneVerification";
 import { ProfileForm } from "./ProfileForm";
@@ -38,7 +39,7 @@ export default async function ProfilePage() {
               {initials}
             </div>
             <p className="mt-4 text-lg font-semibold">{user.fullName}</p>
-            <p className="break-all text-sm text-ink-muted">{user.email}</p>
+            <p className="break-all text-sm text-ink-muted">{user.email ?? (user.phone ? formatPhone(user.phone) : "")}</p>
             <div className="mt-3 flex flex-wrap gap-1.5">
               {user.role !== "CUSTOMER" && <StatusChip tone="muted">{ROLE_LABEL[user.role]}</StatusChip>}
               {user.phone &&

@@ -19,15 +19,16 @@ extension RoleLabel on Role {
 class UserView {
   const UserView({
     required this.id,
-    required this.email,
     required this.fullName,
     required this.role,
     required this.phoneVerified,
     this.phone,
+    this.email,
   });
 
   final String id;
-  final String email;
+  /// Staff always have one; customers sign in with their phone and may have none.
+  final String? email;
   final String fullName;
   final Role role;
   final String? phone;
@@ -35,7 +36,7 @@ class UserView {
 
   factory UserView.fromJson(Map<String, dynamic> json) => UserView(
         id: json['id'] as String,
-        email: json['email'] as String,
+        email: json['email'] as String?,
         fullName: json['fullName'] as String,
         role: _roleFrom(json['role'] as String),
         phone: json['phone'] as String?,

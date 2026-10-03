@@ -23,7 +23,13 @@ export const ROUTE_RULES: { prefix: string; roles?: Role[] }[] = [
   { prefix: "/admin", roles: ["CITY_MANAGER", "SUPER_ADMIN"] },
 ];
 
-export const AUTH_PAGES = ["/login", "/register"];
+export const AUTH_PAGES = ["/login", "/login/staff", "/register"];
+
+/** Console routes send signed-out visitors to the staff form; everything else to the customer form. */
+export function loginPathFor(pathname: string): string {
+  const staffArea = ["/staff", "/admin"].some((p) => pathname === p || pathname.startsWith(`${p}/`));
+  return staffArea ? "/login/staff" : "/login";
+}
 
 export function ruleFor(pathname: string) {
   return ROUTE_RULES.find((r) => pathname === r.prefix || pathname.startsWith(`${r.prefix}/`));

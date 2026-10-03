@@ -2,7 +2,7 @@ import { Body, Controller, HttpCode, Inject, Post } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { CurrentUser, Public, type AuthUser } from '../../common/auth.decorators.js';
 import { AuthService } from './auth.service.js';
-import { LoginDto, RefreshDto, RegisterDto, VerifyOtpDto } from './dto/auth.dto.js';
+import { LoginDto, PhoneRequestDto, PhoneSignupDto, PhoneVerifyDto, RefreshDto, VerifyOtpDto } from './dto/auth.dto.js';
 import { OtpService } from './otp.service.js';
 
 @ApiTags('auth')
@@ -13,11 +13,33 @@ export class AuthController {
     @Inject(OtpService) private readonly otp: OtpService,
   ) {}
 
+  // ---- Customers: phone number + one-time code (mock provider until Phase 9: code 123456, dev only) ----
+
+  /** Sends a code. Same response for known and unknown numbers. */
   @Public()
-  @Post('register')
-  register(@Body() dto: RegisterDto) {
-    return this.auth.register(dto);
+  @Post('phone/request')
+  @HttpCode(200)
+  requestPhoneCode(@Body() dto: PhoneRequestDto) {
+    return this.auth.requestPhoneCode(dto.phone);
   }
+
+  /** Known number: signs in. New number: `{ status: 'NEEDS_NAME', signupToken }`. */
+  @Public()
+  @Post('phone/verify')
+  @HttpCode(200)
+  verifyPhoneCode(@Body() dto: PhoneVerifyDto) {
+    return this.auth.verifyPhoneCode(dto);
+  }
+
+  /** Finishes sign-up for a new number with the ticket from phone/verify. */
+  @Public()
+  @Post('phone/signup')
+  @HttpCode(200)
+  completePhoneSignup(@Body() dto: PhoneSignupDto) {
+    return this.auth.completePhoneSignup(dto);
+  }
+
+  // ---- Staff: email + password ----
 
   @Public()
   @Post('login')
@@ -25,6 +47,8 @@ export class AuthController {
   login(@Body() dto: LoginDto) {
     return this.auth.login(dto);
   }
+
+  // ---- Sessions ----
 
   @Public()
   @Post('refresh')
@@ -40,7 +64,7 @@ export class AuthController {
     await this.auth.logout(dto.refreshToken);
   }
 
-  // Mock OTP in Phase 2 (code 123456, development only). Real provider in Phase 9.
+  // ---- Verify a phone number changed in the profile ----
 
   @ApiBearerAuth()
   @Post('otp/send')

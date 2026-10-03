@@ -2,7 +2,8 @@ export type Role = "SUPER_ADMIN" | "CITY_MANAGER" | "STATION_EMPLOYEE" | "CUSTOM
 
 export interface UserView {
   id: string;
-  email: string;
+  /** Staff always have one; customers sign in with their phone and may have none. */
+  email: string | null;
   phone: string | null;
   fullName: string;
   role: Role;
@@ -18,6 +19,16 @@ export interface AuthResult {
   refreshToken: string;
   /** Access token lifetime in seconds. */
   expiresIn: number;
+}
+
+/** Response of `POST /auth/phone/verify`: signed in, or a new number that still needs a name. */
+export type PhoneVerifyResult =
+  | ({ status: "SIGNED_IN" } & AuthResult)
+  | { status: "NEEDS_NAME"; signupToken: string };
+
+export interface CodeSent {
+  expiresInSeconds: number;
+  resendAfterSeconds: number;
 }
 
 export interface Page<T> {

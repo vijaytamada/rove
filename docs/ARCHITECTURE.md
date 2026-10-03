@@ -28,7 +28,7 @@ backend/test/        e2e tests
 | Module | Phase | Responsibility |
 |---|---|---|
 | Config / Prisma / Redis / Health | 1 | Infrastructure |
-| Auth | 2 | Register, login, JWT, refresh, logout |
+| Auth | 2 | Customer phone + OTP sign-in and sign-up, staff email + password login, JWT, refresh, logout |
 | Users | 2 | Profile, staff management, staff assignments |
 | Rbac | 2 | Roles, guards, scope checks (`@Roles`, `@Scoped`) |
 | Cities | 3 | City CRUD, timezone |

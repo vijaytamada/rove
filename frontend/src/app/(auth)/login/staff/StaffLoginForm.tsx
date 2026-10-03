@@ -6,7 +6,7 @@ import { FormMessage } from "@/components/app/FormMessage";
 import { SubmitButton } from "@/components/app/SubmitButton";
 import { TextField } from "@/components/app/TextField";
 
-export function LoginForm({ next }: { next: string }) {
+export function StaffLoginForm({ next }: { next: string }) {
   const [state, action] = useActionState<FormState, FormData>(login, {});
   return (
     <form action={action} className="space-y-4" noValidate>

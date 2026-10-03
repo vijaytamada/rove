@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { AUTH_PAGES, homeFor, ruleFor } from "@/lib/access";
+import { AUTH_PAGES, homeFor, loginPathFor, ruleFor } from "@/lib/access";
 import { API_URL } from "@/lib/config";
 import { ACCESS_COOKIE, REFRESH_COOKIE, REFRESH_MAX_AGE, cookieOptions } from "@/lib/cookie-config";
 import type { AuthResult, Role } from "@/lib/types";
@@ -60,7 +60,7 @@ export async function proxy(request: NextRequest) {
   let response: NextResponse;
 
   if (rule && !claims) {
-    const url = new URL("/login", request.url);
+    const url = new URL(loginPathFor(pathname), request.url);
     url.searchParams.set("next", pathname);
     response = NextResponse.redirect(url);
   } else if (rule?.roles && claims && !rule.roles.includes(claims.role)) {

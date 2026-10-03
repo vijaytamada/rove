@@ -39,7 +39,7 @@ export default async function ManageStaffPage({
       </Link>
       <PageHeader
         title={person.fullName}
-        description={person.email}
+        description={person.email ?? undefined}
         action={
           <StatusChip tone={person.status === "ACTIVE" ? "success" : "danger"}>
             {person.status === "ACTIVE" ? "Active" : "Disabled"}

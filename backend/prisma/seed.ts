@@ -98,13 +98,16 @@ try {
   const staffPassword = required('SEED_STAFF_PASSWORD');
 
   await upsertUser({ email: required('SEED_ADMIN_EMAIL'), password: adminPassword, fullName: 'Rove Admin', role: 'SUPER_ADMIN' });
-  await upsertUser({
-    email: required('SEED_CUSTOMER_EMAIL'),
-    password: required('SEED_CUSTOMER_PASSWORD'),
-    fullName: 'Demo Customer',
-    role: 'CUSTOMER',
-    phone: '+919000000001',
-  });
+  // Customers sign in with their phone number (mock code 123456 in development): no email or password.
+  const customerPhone = required('SEED_CUSTOMER_PHONE');
+  if (await prisma.user.findUnique({ where: { phone: customerPhone } })) {
+    console.log(`= CUSTOMER ${customerPhone} already exists`);
+  } else {
+    await prisma.user.create({
+      data: { phone: customerPhone, fullName: 'Demo Customer', role: 'CUSTOMER', phoneVerifiedAt: new Date() },
+    });
+    console.log(`+ created CUSTOMER ${customerPhone}`);
+  }
 
   const modelIds: string[] = [];
   for (const m of MODELS) {

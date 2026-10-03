@@ -9,7 +9,8 @@ import { PasswordService } from './password.service.js';
 
 export interface UserView {
   id: string;
-  email: string;
+  /** Null for customers who sign in with their phone only. */
+  email: string | null;
   phone: string | null;
   fullName: string;
   role: Role;
@@ -77,6 +78,21 @@ export class UsersService {
 
   async getByEmail(email: string): Promise<User | null> {
     return this.prisma.user.findUnique({ where: { email: email.toLowerCase() } });
+  }
+
+  async getByPhone(phone: string): Promise<User | null> {
+    return this.prisma.user.findUnique({ where: { phone } });
+  }
+
+  /** Customer account created after the phone number was verified with a one-time code. */
+  async createCustomer(input: { phone: string; fullName: string }): Promise<User> {
+    try {
+      return await this.prisma.user.create({
+        data: { phone: input.phone, fullName: input.fullName.trim(), role: 'CUSTOMER', phoneVerifiedAt: new Date() },
+      });
+    } catch (e) {
+      throw this.mapUniqueError(e);
+    }
   }
 
   async getView(id: string, includeScope = true): Promise<UserView> {

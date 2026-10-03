@@ -1,4 +1,4 @@
-import { ACCOUNTS } from "./env.mjs";
+import { ACCOUNTS, loginPhone } from "./env.mjs";
 // API security/robustness sweep against the running backend (http://localhost:3001).
 const BASE = "http://localhost:3001";
 const results = [];
@@ -17,14 +17,14 @@ const j = async (method, path, { token, body, headers = {}, raw } = {}) => {
 const login = async (email, password) => (await j("POST", "/api/v1/auth/login", { body: { email, password } })).data.accessToken;
 
 const admin = await login("admin@rove.local", ACCOUNTS.admin[1]);
-const customer = await login("customer@rove.local", ACCOUNTS.customer[1]);
+const customer = await loginPhone(BASE + "/api/v1", ACCOUNTS.customer.phone);
 const manager = await login("manager.hyd@rove.local", ACCOUNTS.manager[1]);
 const employee = await login("employee.indiranagar@rove.local", ACCOUNTS.manager[1]);
 
 // 1. Every route in the OpenAPI spec: unauthenticated and wrong-role behaviour.
 const spec = (await j("GET", "/api/docs-json")).data;
 const uuid = "00000000-0000-4000-8000-000000000000";
-const publicPaths = new Set(["/api/v1/health", "/api/v1/auth/register", "/api/v1/auth/login", "/api/v1/auth/refresh", "/api/v1/auth/logout", "/api/v1/cities", "/api/v1/cities/{cityId}/stations", "/api/v1/stations/{id}", "/api/v1/stations/{stationId}/vehicles"]);
+const publicPaths = new Set(["/api/v1/health", "/api/v1/auth/phone/request", "/api/v1/auth/phone/verify", "/api/v1/auth/phone/signup", "/api/v1/auth/login", "/api/v1/auth/refresh", "/api/v1/auth/logout", "/api/v1/cities", "/api/v1/cities/{cityId}/stations", "/api/v1/stations/{id}", "/api/v1/stations/{stationId}/vehicles"]);
 let routeCount = 0;
 for (const [path, methods] of Object.entries(spec.paths)) {
   for (const method of Object.keys(methods)) {
@@ -93,12 +93,12 @@ const tampered = customer.slice(0, -3) + (customer.endsWith("aaa") ? "bbb" : "aa
 check("tampered JWT rejected", (await j("GET", "/api/v1/me", { token: tampered })).status === 401);
 const noneAlg = "eyJhbGciOiJub25lIiwidHlwIjoiSldUIn0." + Buffer.from(JSON.stringify({ sub: uuid, role: "SUPER_ADMIN", exp: 9999999999 })).toString("base64url") + ".";
 check("alg=none JWT rejected", (await j("GET", "/api/v1/users", { token: noneAlg })).status === 401);
-check("refresh token is not accepted as access token", (await j("GET", "/api/v1/me", { token: (await j("POST", "/api/v1/auth/login", { body: { email: "customer@rove.local", password: ACCOUNTS.customer[1] } })).data.refreshToken })).status === 401);
+check("refresh token is not accepted as access token", (await j("GET", "/api/v1/me", { token: (await j("POST", "/api/v1/auth/login", { body: { email: ACCOUNTS.employee[0], password: ACCOUNTS.employee[1] } })).data.refreshToken })).status === 401);
 
 // 6. Login brute-force behaviour (informational).
 let throttled = false;
 for (let i = 0; i < 25; i++) {
-  const r = await j("POST", "/api/v1/auth/login", { body: { email: "customer@rove.local", password: "wrong-" + i } });
+  const r = await j("POST", "/api/v1/auth/login", { body: { email: ACCOUNTS.employee[0], password: "wrong-" + i } });
   if (r.status === 429) { throttled = true; break; }
 }
 check("login is rate limited after repeated failures", throttled, throttled ? "" : "25 failed attempts all processed (no throttling)");

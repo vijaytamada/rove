@@ -1,4 +1,4 @@
-import { ACCOUNTS } from "./env.mjs";
+import { ACCOUNTS, clearOtpLimits } from "./env.mjs";
 // Concurrency probes against the running API. Creates e2e- prefixed data and cleans it up via SQL afterwards.
 import { execSync } from "node:child_process";
 const BASE = "http://localhost:3001/api/v1";
@@ -47,13 +47,26 @@ out.push([`parallel status/update on one vehicle -> no 5xx`, mix.every((r) => r.
 const cities = await Promise.all(Array.from({ length: 6 }, () => j("POST", "/cities", admin, { name: `e2e-race-dupcity-${rid}`, state: "Race" })));
 out.push([`duplicate city: 6 parallel creates`, cities.filter((r) => r.status === 201).length === 1 && cities.every((r) => [201, 409].includes(r.status)), cities.map((r) => r.status).join(",")]);
 
-// 5. Parallel registrations with the same email.
-const email = `e2e-race-${rid}@rove.test`;
-const regs = await Promise.all(Array.from({ length: 8 }, () => fetch(BASE + "/auth/register", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email, password: "Test-Pass-12345", fullName: "Race" }) }).then((r) => r.status)));
-out.push([`duplicate registration: 8 parallel`, regs.filter((s) => s === 201).length === 1 && regs.every((s) => [201, 409].includes(s)), regs.join(",")]);
+// 5. Sign-ups racing for one new phone number. Two tickets for the same number (a second code was
+//    requested), 4 parallel sign-ups each: the unique phone constraint must give exactly one account, no 5xx.
+const post = (path, body) => fetch(BASE + path, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+const phone = `+9199977${String(Math.floor(Math.random() * 1e5)).padStart(5, "0")}`;
+const ticket = async () => {
+  clearOtpLimits(phone);
+  await post("/auth/phone/request", { phone });
+  return (await (await post("/auth/phone/verify", { phone, code: "123456" })).json()).signupToken;
+};
+const [ticketA, ticketB] = [await ticket(), await ticket()];
+const signups = await Promise.all(
+  [ticketA, ticketA, ticketA, ticketA, ticketB, ticketB, ticketB, ticketB].map((signupToken) =>
+    post("/auth/phone/signup", { signupToken, fullName: "e2e-race" }).then(async (r) => ({ s: r.status, b: await r.json() })),
+  ),
+);
+const won = signups.filter((r) => r.s === 200);
+out.push([`new phone: 8 parallel sign-ups, 2 tickets`, won.length === 1 && signups.every((r) => r.s < 500 && [200, 400, 409].includes(r.s)), signups.map((r) => r.s).join(",")]);
 
 // 6. Parallel refresh with one token (browser tabs): exactly one wins, session survives.
-const lg = await (await fetch(BASE + "/auth/login", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email, password: "Test-Pass-12345" }) })).json();
+const lg = won[0]?.b ?? {};
 const refs = await Promise.all(Array.from({ length: 6 }, () => fetch(BASE + "/auth/refresh", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ refreshToken: lg.refreshToken }) }).then(async (r) => ({ s: r.status, b: await r.json() }))));
 const winner = refs.find((r) => r.s === 200);
 const winnerStillValid = winner ? (await fetch(BASE + "/auth/refresh", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ refreshToken: winner.b.refreshToken }) })).status === 200 : false;
@@ -65,7 +78,7 @@ delete from "Vehicle" where code like 'E2E-R%' or code like 'E2E-D%';
 delete from "Station" where name like 'e2e-race-%';
 delete from "City" where name like 'e2e-race-%';
 delete from "VehicleModel" where brand like 'e2e-race-%';
-delete from "User" where email like 'e2e-race-%';`;
+delete from "User" where phone = '${phone}';`;
 execSync(`docker exec -i rove-postgres psql -U rove -d rove`, { input: sql });
 
 let bad2 = 0;

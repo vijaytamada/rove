@@ -36,7 +36,8 @@ A user has exactly one role. Role is in the JWT; **scope is loaded from DB (cach
 | Manage vehicles (create/status) | ✓ | ✓ (own cities) | status→MAINTENANCE only (own station) | — |
 | Create managers | ✓ | — | — | — |
 | Create station employees | ✓ | ✓ (stations in own cities) | — | — |
-| Register / edit own profile | ✓ | ✓ | ✓ | ✓ |
+| Sign up (by phone) / edit own profile | — | — | — | ✓ |
+| Edit own profile | ✓ | ✓ | ✓ | ✓ |
 | Create booking / pay / cancel own | — | — | — | ✓ |
 | View bookings | all | own cities | own stations | own |
 | Pickup / return / record damage | ✓ (override) | ✓ | ✓ (own station) | — |
@@ -49,5 +50,6 @@ A user has exactly one role. Role is in the JWT; **scope is loaded from DB (cach
 ## Notes
 - Employee "own station" for a return means the **return station** (the vehicle may have been picked up elsewhere).
 - Customers cannot book if `phoneVerified=false`, `kycStatus!=VERIFIED`, or they have an outstanding settlement.
+- Customers sign in with phone + one-time code; staff roles sign in with email + password. A customer can never use the password endpoint and a staff number is never sent a sign-in code. There is no public registration: staff accounts are created by a super admin (or a manager for employees).
 - Deactivated users (`status=DISABLED`) are rejected at login and refresh.
 - Every staff mutation that touches money, vehicle status, or roles writes an `AuditLog` row.
