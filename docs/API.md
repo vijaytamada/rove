@@ -16,11 +16,23 @@ REST + JSON, prefix `/api/v1`, Swagger UI at `/api/docs`, OpenAPI JSON at `/api/
 ### Phase 1 — Foundation
 `GET /health`
 
-### Phase 2 — Auth & users
-`POST /auth/register` · `POST /auth/login` · `POST /auth/refresh` · `POST /auth/logout`
-`POST /auth/otp/send` · `POST /auth/otp/verify` (mock)
-`GET /me` · `PATCH /me`
-`POST /users` (admin creates staff) · `GET /users` · `PATCH /users/:id` · `PUT /users/:id/assignments`
+### Phase 2 — Auth & users (implemented)
+| Endpoint | Access | Notes |
+|---|---|---|
+| `POST /auth/register` | public | Always creates a `CUSTOMER`. Returns `{ user, accessToken, refreshToken, expiresIn }`. Phone optional, E.164 (`+919876543210`) |
+| `POST /auth/login` | public | Same error for unknown email and wrong password (`INVALID_CREDENTIALS`); disabled accounts get `ACCOUNT_DISABLED` |
+| `POST /auth/refresh` | public | Body `{ refreshToken }`. Rotates: old token is revoked, new pair returned. Reusing a revoked token revokes all sessions (`INVALID_REFRESH_TOKEN`) |
+| `POST /auth/logout` | public | Body `{ refreshToken }`; 204 |
+| `POST /auth/otp/send` | signed in | Sends a phone-verification code (mock: always `123456`, dev only). 30 s resend cooldown, 5 min expiry |
+| `POST /auth/otp/verify` | signed in | Body `{ code }`; 204. 5 wrong attempts lock the challenge |
+| `GET /me` · `PATCH /me` | signed in | Profile incl. `phoneVerified` and `scope { cityIds, stationIds }`. `PATCH` accepts `fullName`, `phone` (changing phone resets verification) |
+| `POST /users` | SUPER_ADMIN | Create `CITY_MANAGER` / `STATION_EMPLOYEE` / `SUPER_ADMIN` with optional `assignments` |
+| `GET /users?role&page&limit` · `GET /users/:id` | SUPER_ADMIN | |
+| `PATCH /users/:id` | SUPER_ADMIN | `fullName`, `status`. Disabling revokes the user's sessions; can't disable yourself |
+| `PUT /users/:id/assignments` | SUPER_ADMIN | Replaces the user's city/station assignments |
+
+Tokens: access token = JWT (15 min, `Authorization: Bearer`); refresh token = opaque random string (30 days), stored hashed.
+Error codes added: `UNAUTHENTICATED`, `INVALID_TOKEN`, `INVALID_CREDENTIALS`, `ACCOUNT_DISABLED`, `INVALID_REFRESH_TOKEN`, `EMAIL_TAKEN`, `PHONE_TAKEN`, `PHONE_REQUIRED`, `PHONE_ALREADY_VERIFIED`, `OTP_INVALID`, `OTP_EXPIRED`, `OTP_RESEND_TOO_SOON`, `OTP_TOO_MANY_ATTEMPTS`, `FORBIDDEN_ROLE`, `FORBIDDEN_SCOPE`, `INVALID_ASSIGNMENT`, `INVALID_ROLE`, `CANNOT_DISABLE_SELF`, `USER_NOT_FOUND`, `VALIDATION_ERROR`.
 
 ### Phase 3 — Network & fleet
 Public: `GET /cities` · `GET /cities/:id/stations` · `GET /stations/:id` · `GET /stations/:id/vehicles?from&to` (available only)

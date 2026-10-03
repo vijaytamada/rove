@@ -1,25 +1,15 @@
-import { Test } from '@nestjs/testing';
-import type { INestApplication } from '@nestjs/common';
-import request from 'supertest';
-import { AppModule } from '../src/app.module.js';
+import { createTestApp, type TestApp } from './helpers.js';
 
-// Requires Postgres + Redis from `docker compose up -d` (see infra/README.md).
+// Requires Postgres + Redis from `docker compose up -d` (see docs/DEV_SETUP.md).
 describe('Health (e2e)', () => {
-  let app: INestApplication;
-
+  let t: TestApp;
   beforeAll(async () => {
-    const moduleRef = await Test.createTestingModule({ imports: [AppModule] }).compile();
-    app = moduleRef.createNestApplication();
-    app.setGlobalPrefix('api/v1');
-    await app.init();
+    t = await createTestApp();
   });
+  afterAll(() => t.cleanup());
 
-  afterAll(async () => {
-    await app.close();
-  });
-
-  it('GET /api/v1/health returns ok with database and redis up', async () => {
-    const res = await request(app.getHttpServer()).get('/api/v1/health').expect(200);
+  it('GET /api/v1/health is public and reports database and redis up', async () => {
+    const res = await t.http().get('/api/v1/health').expect(200);
     expect(res.body.status).toBe('ok');
     expect(res.body.checks).toEqual({ database: 'up', redis: 'up' });
   });

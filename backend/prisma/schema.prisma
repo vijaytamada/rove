@@ -1,5 +1,4 @@
-// Phase 1: no domain models yet. Phase 2 adds User, RefreshToken, StaffAssignment.
-// See docs/DATABASE.md for the planned entities.
+// See docs/DATABASE.md for the planned entities. Money fields (later phases) are integer paise.
 
 generator client {
   provider     = "prisma-client"
@@ -9,4 +8,64 @@ generator client {
 
 datasource db {
   provider = "postgresql"
+}
+
+enum Role {
+  SUPER_ADMIN
+  CITY_MANAGER
+  STATION_EMPLOYEE
+  CUSTOMER
+}
+
+enum UserStatus {
+  ACTIVE
+  DISABLED
+}
+
+model User {
+  id              String     @id @default(uuid()) @db.Uuid
+  email           String     @unique
+  phone           String?    @unique
+  passwordHash    String
+  fullName        String
+  role            Role       @default(CUSTOMER)
+  status          UserStatus @default(ACTIVE)
+  phoneVerifiedAt DateTime?
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+
+  refreshTokens RefreshToken[]
+  assignments   StaffAssignment[]
+
+  @@index([role])
+}
+
+// Opaque refresh tokens: only the SHA-256 hash is stored. Rotated on every use.
+model RefreshToken {
+  id        String    @id @default(uuid()) @db.Uuid
+  userId    String    @db.Uuid
+  tokenHash String    @unique
+  expiresAt DateTime
+  revokedAt DateTime?
+  createdAt DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+// Defines staff scope. Exactly one of cityId / stationId is set (CHECK constraint in migration).
+// cityId/stationId are plain UUIDs for now; Phase 3 adds the City/Station tables and foreign keys.
+model StaffAssignment {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @db.Uuid
+  cityId    String?  @db.Uuid
+  stationId String?  @db.Uuid
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, cityId])
+  @@unique([userId, stationId])
+  @@index([userId])
 }

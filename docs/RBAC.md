@@ -17,6 +17,13 @@ A user has exactly one role. Role is in the JWT; **scope is loaded from DB (cach
 4. Customers: always filter by `booking.customerId === user.id`; return 404 (not 403) for others' resources.
 5. Staff can never create/escalate roles above their own: manager creates employees only within their cities; only super admin creates managers/admins.
 
+## Implementation (Phase 2)
+- `JwtAuthGuard` and `RolesGuard` are global (`APP_GUARD`). Mark open routes `@Public()`; restrict with `@Roles('SUPER_ADMIN', ...)`; read the caller with `@CurrentUser()`.
+- `ScopeService.getScope(user)` reads `StaffAssignment` from the DB on every check. `assertCityAccess(user, cityId)` and `assertStationAccess(user, { stationId, cityId })` throw `FORBIDDEN_SCOPE`. Phase 3 services call these with the station's city resolved from the DB.
+- Access tokens carry only `sub` and `role` (role changes take effect when the access token expires, ≤ 15 min). Disabling a user revokes refresh tokens immediately; an already-issued access token stays valid until it expires.
+- `StaffAssignment.cityId/stationId` are plain UUID columns until Phase 3 adds the City/Station tables and foreign keys. A DB CHECK enforces exactly one of the two per row. CITY_MANAGER rows must be cities, STATION_EMPLOYEE rows must be stations.
+- In Phase 2 only SUPER_ADMIN manages users. City managers creating employees for their own cities arrives in Phase 3 (needs stations to resolve city ownership).
+
 ## Permission matrix (✓ = allowed within scope)
 | Capability | Super Admin | City Manager | Station Employee | Customer |
 |---|:-:|:-:|:-:|:-:|

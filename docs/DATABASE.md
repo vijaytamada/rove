@@ -35,6 +35,12 @@ PostgreSQL via Prisma. This lists expected entities and purpose only. Detailed c
 | **TelemetryPoint** | 11 | Vehicle FK, ts, lat/lng, speed, battery, odometer, ignition (partition/retention later) |
 | **DeviceMapping / LockEvent** | 12 | IoT device ↔ vehicle; lock/unlock commands and results |
 
+## Phase 2 notes (implemented: User, RefreshToken, StaffAssignment)
+- `User`: email (unique, stored lowercase), optional unique phone (E.164), `passwordHash` (argon2id), `role`, `status`, `phoneVerifiedAt`. `kycStatus` and outstanding-balance fields are added in Phases 4/6.
+- `RefreshToken`: stores only the SHA-256 hash of an opaque random token; `revokedAt` marks rotated/revoked tokens (kept for reuse detection).
+- `StaffAssignment`: exactly one of `cityId` / `stationId` (DB CHECK). No foreign keys yet; Phase 3 adds them.
+- OTP challenges live in Redis (`otp:phone:<userId>`, TTL 5 min; `otp:cooldown:<userId>`, TTL 30 s), not in Postgres. The `OtpChallenge` table from the entity list is not needed.
+
 ## Key relationships
 ```
 City 1─* Station 1─* Vehicle *─1 VehicleModel 1─* PricingPlan

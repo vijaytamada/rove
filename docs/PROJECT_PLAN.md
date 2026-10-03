@@ -54,5 +54,11 @@ These are the simplest reasonable defaults so Phases 4–6 can proceed; confirm 
 | 2026-10-03 | Flutter Phase 1 uses `dart:io` HttpClient (no `http` package yet) | Avoid unneeded dependency |
 | 2026-10-03 | Dev emulators: `Rove_Pixel` (Pixel 8) and `Rove_Pixel_10`, Android 15 Google APIs image, one at a time | Stability on WHPX; see `docs/DEV_SETUP.md` |
 
+| 2026-10-03 | Phase 2 auth: opaque rotating refresh tokens (hashed in DB) + short-lived JWT access tokens; no Passport; argon2id via `@node-rs/argon2` | Fewer dependencies, reuse detection |
+| 2026-10-03 | Login = email + password for all roles; phone verified by mock OTP (open decision #1 resolved with default) | Simplest MVP |
+| 2026-10-03 | Phase 2: only SUPER_ADMIN creates/manages staff; manager-creates-employee deferred to Phase 3 | Needs stations to resolve city ownership |
+| 2026-10-03 | `StaffAssignment` city/station ids have no FK until Phase 3 | Tables don't exist yet |
+| 2026-10-03 | Vitest uses a small TypeScript-compiler plugin for decorator metadata instead of SWC | SWC native binary blocked by Windows folder ACLs |
+
 ## 8. Open questions
 See the end of the planning summary / `docs/PHASES.md` §Open decisions. Resolve before the phase noted.
