@@ -4,8 +4,9 @@ import { SubmitButton } from "@/components/app/SubmitButton";
 import { requireUser } from "@/lib/dal";
 import { formatPhone } from "@/lib/phone";
 import type { Role } from "@/lib/types";
-import { PhoneVerification } from "./PhoneVerification";
-import { ProfileForm } from "./ProfileForm";
+import { DetailRow } from "./DetailRow";
+import { EditableName } from "./EditableName";
+import { PhoneRow } from "./PhoneRow";
 
 export const metadata = { title: "Profile" };
 
@@ -26,29 +27,26 @@ export default async function ProfilePage() {
     .join("");
 
   return (
-    <div className="mx-auto max-w-5xl">
-      <h1 className="text-3xl font-semibold tracking-tight">Profile</h1>
+    <div className="mx-auto max-w-4xl">
+      <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">Profile</h1>
+      <p className="mt-1.5 text-ink-muted">Your details and how we reach you.</p>
 
-      <div className="mt-8 grid gap-6 lg:grid-cols-3">
-        <div className="space-y-4 lg:col-span-1">
-          <section className="rounded-card border border-line bg-surface p-6">
+      <div className="mt-8 grid items-start gap-6 md:grid-cols-[18rem_1fr]">
+        <div className="space-y-4">
+          <section className="rounded-card border border-line bg-surface p-6 text-center md:text-left">
             <div
               aria-hidden="true"
-              className="flex size-16 items-center justify-center rounded-full bg-ink text-xl font-medium text-white"
+              className="mx-auto flex size-20 items-center justify-center rounded-full bg-ink text-2xl font-medium text-white md:mx-0"
             >
               {initials}
             </div>
             <p className="mt-4 text-lg font-semibold">{user.fullName}</p>
             <p className="break-all text-sm text-ink-muted">{user.email ?? (user.phone ? formatPhone(user.phone) : "")}</p>
-            <div className="mt-3 flex flex-wrap gap-1.5">
-              {user.role !== "CUSTOMER" && <StatusChip tone="muted">{ROLE_LABEL[user.role]}</StatusChip>}
-              {user.phone &&
-                (user.phoneVerified ? (
-                  <StatusChip tone="success">Phone verified</StatusChip>
-                ) : (
-                  <StatusChip tone="warning">Phone not verified</StatusChip>
-                ))}
-            </div>
+            {user.role !== "CUSTOMER" && (
+              <div className="mt-3">
+                <StatusChip tone="muted">{ROLE_LABEL[user.role]}</StatusChip>
+              </div>
+            )}
           </section>
 
           <form action={logout}>
@@ -56,18 +54,19 @@ export default async function ProfilePage() {
           </form>
         </div>
 
-        <div className="space-y-6 lg:col-span-2">
-          {user.phone && !user.phoneVerified && (
-            <PhoneVerification phone={user.phone} devHint={process.env.NODE_ENV !== "production"} />
-          )}
-
-          <section className="rounded-card border border-line bg-surface p-6">
-            <h2 className="mb-5 text-base font-semibold">Your details</h2>
-            <div className="max-w-md">
-              <ProfileForm fullName={user.fullName} phone={user.phone} />
-            </div>
-          </section>
-        </div>
+        <section className="rounded-card border border-line bg-surface p-6 sm:p-8">
+          <h2 className="mb-6 text-base font-semibold">Personal details</h2>
+          <div>
+            <EditableName fullName={user.fullName} />
+            <PhoneRow phone={user.phone} verified={user.phoneVerified} devHint={process.env.NODE_ENV !== "production"} />
+            {user.email && (
+              <DetailRow label="Email">
+                <p className="break-all text-base font-medium">{user.email}</p>
+                <p className="mt-1 text-sm text-ink-muted">Used to sign in. Ask an admin to change it.</p>
+              </DetailRow>
+            )}
+          </div>
+        </section>
       </div>
     </div>
   );

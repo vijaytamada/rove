@@ -36,10 +36,6 @@ export class UpdateMeDto {
   @MinLength(1)
   @MaxLength(100)
   fullName?: string;
-
-  @IsOptional()
-  @Matches(PHONE_PATTERN, { message: PHONE_MESSAGE })
-  phone?: string;
 }
 
 export class CreateStaffDto {

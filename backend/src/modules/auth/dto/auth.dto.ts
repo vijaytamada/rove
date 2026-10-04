@@ -26,6 +26,12 @@ export class VerifyOtpDto {
   code!: string;
 }
 
+/** Step 1 of changing the profile phone: the new number to send a code to. */
+export class ChangePhoneDto {
+  @Matches(PHONE_PATTERN, { message: PHONE_MESSAGE })
+  phone!: string;
+}
+
 export class PhoneRequestDto {
   @Matches(PHONE_PATTERN, { message: PHONE_MESSAGE })
   phone!: string;

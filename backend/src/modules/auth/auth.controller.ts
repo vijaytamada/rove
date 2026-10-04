@@ -2,7 +2,7 @@ import { Body, Controller, HttpCode, Inject, Post } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { CurrentUser, Public, type AuthUser } from '../../common/auth.decorators.js';
 import { AuthService } from './auth.service.js';
-import { LoginDto, PhoneRequestDto, PhoneSignupDto, PhoneVerifyDto, RefreshDto, VerifyOtpDto } from './dto/auth.dto.js';
+import { ChangePhoneDto, LoginDto, PhoneRequestDto, PhoneSignupDto, PhoneVerifyDto, RefreshDto, VerifyOtpDto } from './dto/auth.dto.js';
 import { OtpService } from './otp.service.js';
 
 @ApiTags('auth')
@@ -78,5 +78,21 @@ export class AuthController {
   @HttpCode(204)
   async verifyOtp(@CurrentUser() user: AuthUser, @Body() dto: VerifyOtpDto): Promise<void> {
     await this.otp.verifyPhone(user.id, dto.code);
+  }
+
+  // ---- Change the profile phone: send a code to the new number, then confirm it (the number is saved on confirm) ----
+
+  @ApiBearerAuth()
+  @Post('phone/change')
+  @HttpCode(200)
+  changePhone(@CurrentUser() user: AuthUser, @Body() dto: ChangePhoneDto) {
+    return this.otp.requestPhoneChange(user.id, dto.phone);
+  }
+
+  @ApiBearerAuth()
+  @Post('phone/change/verify')
+  @HttpCode(204)
+  async confirmPhoneChange(@CurrentUser() user: AuthUser, @Body() dto: VerifyOtpDto): Promise<void> {
+    await this.otp.confirmPhoneChange(user.id, dto.code);
   }
 }

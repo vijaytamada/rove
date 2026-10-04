@@ -36,7 +36,7 @@ for (const [path, methods] of Object.entries(spec.paths)) {
     if (!publicPaths.has(path)) {
       check(`anon ${m} ${path} -> 401`, anon.status === 401, `got ${anon.status}`);
       const cust = await j(m, url, { token: customer, body });
-      const allowedForCustomer = ["/api/v1/me", "/api/v1/auth/otp/send", "/api/v1/auth/otp/verify"].includes(path);
+      const allowedForCustomer = ["/api/v1/me", "/api/v1/auth/otp/send", "/api/v1/auth/otp/verify", "/api/v1/auth/phone/change", "/api/v1/auth/phone/change/verify"].includes(path);
       if (!allowedForCustomer) check(`customer ${m} ${path} -> 403`, cust.status === 403, `got ${cust.status}`);
     }
   }

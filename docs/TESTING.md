@@ -22,9 +22,9 @@ Notes
 ## What is covered (state after Phase 3)
 | Area | Tests |
 |---|---|
-| Backend | 31 unit, 81 end-to-end (phone sign-in and sign-up, OTP limits, staff login, tokens, RBAC and scope, cities/stations/models/vehicles, staff management, security headers, hostile input, login throttle, capacity races) |
+| Backend | 31 unit, 84 end-to-end (phone sign-in and sign-up, OTP limits, staff login, tokens, RBAC and scope, cities/stations/models/vehicles, staff management, security headers, hostile input, login throttle, capacity races) |
 | Website | lint + production build; `pages.mjs`: 23 routes × 5 roles (anonymous, customer, employee, manager, admin) = 120 checks (including `/login/staff` and the `/register` redirect) plus 11 content/scoping checks; interactive form flows in a browser (see below) |
-| Flutter | 45 unit and widget tests (API client token refresh, auth controller incl. offline, phone sign-in: code, wrong code, new-number name step, expired ticket, resend countdown, change number; code boxes, profile/OTP screens, station browsing) |
+| Flutter | 54 unit and widget tests (API client token refresh, auth controller incl. offline, phone sign-in: code, wrong code, new-number name step, expired ticket, resend countdown, change number; code boxes, profile read-only view, inline name edit, two-step phone change (right code, wrong code, number taken), verify-now, station browsing) |
 | API sweep | 70 checks: every route in the OpenAPI spec rejects anonymous (401) and wrong-role (403) calls; hostile/malformed input gives clean 4xx with no leaks; headers; CORS; JWT tampering; refresh-token misuse; login throttling |
 | Concurrency | 6 probes: station capacity (create and move), duplicate vehicle code, duplicate city, parallel sign-ups for one new phone number (two tickets), parallel status/update, parallel refresh |
 | Database | Fresh database built from all migrations + seed run twice (idempotent); CHECK constraints; no leftover test rows |

@@ -28,7 +28,7 @@ const tooSoon = () => new AppException(429, 'OTP_RESEND_TOO_SOON', 'Wait a momen
 const expired = () => new AppException(400, 'OTP_EXPIRED', 'That code has expired. Request a new one.');
 
 /**
- * One-time codes for (a) signing in with a phone number and (b) verifying a changed profile phone.
+ * One-time codes for (a) signing in with a phone number and (b) verifying a profile phone (existing unverified number, or a new number before it is saved).
  * Rules (expiry, resend cooldown, attempt limit, send caps) live here so they stay identical when the
  * mock provider is replaced by a real one (Phase 9). The provider only sends and checks codes.
  *
@@ -110,6 +110,25 @@ export class OtpService {
     }
     await this.checkChallenge('verify', userId, user.phone ?? '', code);
     await this.users.markPhoneVerified(userId);
+  }
+
+  // ---------------- Change the profile phone: the NEW number is saved only after its code is confirmed ----------------
+
+  async requestPhoneChange(userId: string, phone: string): Promise<OtpSent> {
+    const user = await this.users.getById(userId);
+    if (user.phone === phone && user.phoneVerifiedAt) {
+      throw new AppException(409, 'PHONE_UNCHANGED', 'That is already your verified number.');
+    }
+    await this.users.assertPhoneAvailable(phone, userId);
+    await this.startChallenge('change', userId, phone, true);
+    return { expiresInSeconds: OTP_TTL_SECONDS, resendAfterSeconds: RESEND_COOLDOWN_SECONDS };
+  }
+
+  async confirmPhoneChange(userId: string, code: string): Promise<void> {
+    const challenge = await this.load('change', userId);
+    if (!challenge) throw expired();
+    await this.checkChallenge('change', userId, challenge.phone, code);
+    await this.users.setVerifiedPhone(userId, challenge.phone);
   }
 
   // ---------------- Shared challenge handling ----------------

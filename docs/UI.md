@@ -111,6 +111,13 @@ frontend/src/
 - The sidebar appears from 1280px; below that the console uses the top bar with scrolling links.
 - One-time codes use `<OtpInput>` (web) / `OtpField` (Flutter): one box per digit.
 
+### Profile (2026-10-04)
+- Details are **read-only by default**: a label, the value and a pencil button. Nothing looks like an input until the pencil is pressed.
+- **Name:** the pencil turns the row into a text box with Save and Cancel (inline, no popup).
+- **Phone:** the pencil opens a modal (web `<Modal>`) or bottom sheet (Flutter) in two steps: (1) new `+91` number, "Send code"; (2) the six code boxes, which submit at the sixth digit, with a resend countdown and "Change number". The number is saved only after the code is right (`POST /auth/phone/change`, then `/auth/phone/change/verify`); a wrong code leaves the old number untouched. A saved but unverified number shows "Not verified" and "Verify now", which skips to step 2.
+- Email (staff) is read-only: "Used to sign in. Ask an admin to change it."
+- `<Modal>` (`components/app/Modal.tsx`) is the one dialog primitive; `<AddDialog>` is built on it.
+
 ## 9. Rules
 - Build from shared components; no one-off styling; no hard-coded colors (tokens only).
 - Every list/screen has loading, empty and error states.

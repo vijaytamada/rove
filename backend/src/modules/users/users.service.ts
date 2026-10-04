@@ -162,19 +162,23 @@ export class UsersService {
   }
 
   async updateMe(id: string, dto: UpdateMeDto): Promise<User> {
-    const current = await this.getById(id);
-    const phoneChanged = dto.phone !== undefined && dto.phone !== current.phone;
-    if (phoneChanged) await this.assertUnique({ phone: dto.phone, excludeId: id });
+    await this.getById(id);
+    return this.prisma.user.update({
+      where: { id },
+      data: { ...(dto.fullName !== undefined && { fullName: dto.fullName.trim() }) },
+    });
+  }
 
+  /** Throws PHONE_TAKEN when another account already uses `phone`. */
+  async assertPhoneAvailable(phone: string, userId: string): Promise<void> {
+    await this.assertUnique({ phone, excludeId: userId });
+  }
+
+  /** Saves a phone number that has just been confirmed with a one-time code. */
+  async setVerifiedPhone(id: string, phone: string): Promise<void> {
+    await this.assertUnique({ phone, excludeId: id });
     try {
-      return await this.prisma.user.update({
-        where: { id },
-        data: {
-          ...(dto.fullName !== undefined && { fullName: dto.fullName.trim() }),
-          // Changing the phone number requires verifying it again.
-          ...(phoneChanged && { phone: dto.phone, phoneVerifiedAt: null }),
-        },
-      });
+      await this.prisma.user.update({ where: { id }, data: { phone, phoneVerifiedAt: new Date() } });
     } catch (e) {
       throw this.mapUniqueError(e);
     }

@@ -203,42 +203,187 @@ void main() {
     expect(find.text('Hi, Asha'), findsOneWidget);
   });
 
-  testWidgets('profile shows the phone, verifies a changed number and signs out', (tester) async {
-    var verified = false;
-    final env = TestEnv((r) async {
-      final path = r.url.path;
-      if (path.endsWith('/auth/phone/request')) return codeSent();
-      if (path.endsWith('/auth/phone/verify')) return authOk(user: userJson(phone: testPhone));
-      if (path.endsWith('/auth/otp/send')) return json(200, {'expiresInSeconds': 300});
-      if (path.endsWith('/auth/otp/verify')) {
-        verified = true;
-        return json(204, {});
-      }
-      if (path.endsWith('/auth/logout')) return json(204, {});
-      return json(200, userJson(phone: testPhone, phoneVerified: verified));
+  group('profile', () {
+    const newPhone = '+919876500001';
+
+    /// Signs in and opens the profile. `me` is what GET /me answers with; `extra` can override any route.
+    Future<TestEnv> openProfile(WidgetTester tester, Map<String, dynamic> Function() me, {Future<http.Response?> Function(http.Request)? extra}) async {
+      final env = TestEnv((r) async {
+        final path = r.url.path;
+        final custom = await extra?.call(r);
+        if (custom != null) return custom;
+        if (path.endsWith('/auth/phone/request')) return codeSent();
+        if (path.endsWith('/auth/phone/verify')) return authOk(user: me());
+        if (path.endsWith('/auth/logout')) return json(204, {});
+        return json(200, me());
+      });
+      await pumpApp(tester, env);
+      await signInThroughForm(tester);
+      await tester.tap(find.text('Profile'));
+      await tester.pumpAndSettle();
+      return env;
+    }
+
+    testWidgets('shows details read-only, with an edit pencil instead of boxes', (tester) async {
+      await openProfile(tester, () => userJson(phone: testPhone, phoneVerified: true));
+      expect(find.text('Asha Kumar'), findsWidgets);
+      expect(find.text('+91 98765 43210'), findsWidgets);
+      expect(find.text('Verified'), findsOneWidget);
+      expect(find.byType(TextFormField), findsNothing);
+      expect(find.byTooltip('Edit full name'), findsOneWidget);
+      expect(find.byTooltip('Change mobile number'), findsOneWidget);
     });
-    await pumpApp(tester, env);
-    await signInThroughForm(tester);
 
-    await tester.tap(find.text('Profile'));
-    await tester.pumpAndSettle();
-    expect(find.text('+91 98765 43210'), findsOneWidget); // no email: the phone is shown
-    expect(find.text('Phone not verified'), findsOneWidget);
+    testWidgets('the name edits in place: pencil, type, save', (tester) async {
+      var name = 'Asha Kumar';
+      final env = await openProfile(
+        tester,
+        () => userJson(name: name, phone: testPhone, phoneVerified: true),
+        extra: (r) async {
+          if (r.method == 'PATCH' && r.url.path.endsWith('/me')) {
+            name = 'Asha K';
+            return json(200, userJson(name: name, phone: testPhone, phoneVerified: true));
+          }
+          return null;
+        },
+      );
 
-    await tester.tap(find.text('Send code'));
-    await tester.pumpAndSettle();
-    expect(find.text('Resend code'), findsOneWidget);
+      await tester.tap(find.byTooltip('Edit full name'));
+      await tester.pumpAndSettle();
+      expect(find.widgetWithText(FilledButton, 'Save'), findsOneWidget);
 
-    await tester.enterText(field('Code'), '123456');
-    await tester.tap(find.widgetWithText(FilledButton, 'Verify'));
-    await tester.pumpAndSettle();
-    expect(find.text('Phone verified'), findsOneWidget);
-    expect(find.text('Verify your phone'), findsNothing);
+      await tester.enterText(field('Full name'), 'Asha K');
+      await tester.tap(find.widgetWithText(FilledButton, 'Save'));
+      await tester.pumpAndSettle();
 
-    await tester.scrollUntilVisible(find.text('Sign out'), 200, scrollable: find.byType(Scrollable).first);
-    await tester.tap(find.text('Sign out'));
-    await tester.pumpAndSettle();
-    expect(find.text("Let's get you riding"), findsOneWidget);
-    expect(env.auth.status, AuthStatus.signedOut);
+      final patch = env.to('/me').where((r) => r.method == 'PATCH').single;
+      expect(patch.body, contains('"fullName":"Asha K"'));
+      expect(patch.body, isNot(contains('phone')));
+      expect(find.text('Name updated'), findsOneWidget);
+      expect(find.byType(TextFormField), findsNothing);
+    });
+
+    testWidgets('a new phone number is saved only after its code is confirmed', (tester) async {
+      var phone = testPhone;
+      final env = await openProfile(
+        tester,
+        () => userJson(phone: phone, phoneVerified: true),
+        extra: (r) async {
+          final path = r.url.path;
+          if (path.endsWith('/auth/phone/change')) return codeSent();
+          if (path.endsWith('/auth/phone/change/verify')) {
+            phone = newPhone;
+            return json(204, {});
+          }
+          return null;
+        },
+      );
+
+      await tester.tap(find.byTooltip('Change mobile number'));
+      await tester.pumpAndSettle();
+      expect(find.text('Change mobile number'), findsOneWidget); // sheet title
+
+      await tester.enterText(field('New mobile number'), '98765 00001');
+      await tester.tap(find.widgetWithText(FilledButton, 'Send code'));
+      await tester.pumpAndSettle();
+      expect(env.to('/auth/phone/change').single.body, contains('"phone":"$newPhone"'));
+      expect(env.to('/auth/phone/change/verify'), isEmpty);
+      expect(find.text('We sent a 6-digit code to +91 98765 00001.'), findsOneWidget);
+      expect(env.auth.user?.phone, testPhone); // nothing saved yet
+
+      await tester.enterText(field('Code'), '123456');
+      await tester.pumpAndSettle();
+
+      expect(env.to('/auth/phone/change/verify').single.body, contains('"code":"123456"'));
+      expect(env.auth.user?.phone, newPhone);
+      expect(find.text('Phone number updated'), findsOneWidget);
+      expect(find.text('+91 98765 00001'), findsWidgets);
+    });
+
+    testWidgets('a wrong code keeps the old number and clears the boxes', (tester) async {
+      final env = await openProfile(
+        tester,
+        () => userJson(phone: testPhone, phoneVerified: true),
+        extra: (r) async {
+          final path = r.url.path;
+          if (path.endsWith('/auth/phone/change')) return codeSent();
+          if (path.endsWith('/auth/phone/change/verify')) {
+            return apiError(400, 'OTP_INVALID', "That code isn't right. Try again.");
+          }
+          return null;
+        },
+      );
+      await tester.tap(find.byTooltip('Change mobile number'));
+      await tester.pumpAndSettle();
+      await tester.enterText(field('New mobile number'), '9876500001');
+      await tester.tap(find.widgetWithText(FilledButton, 'Send code'));
+      await tester.pumpAndSettle();
+      await tester.enterText(field('Code'), '000000');
+      await tester.pumpAndSettle();
+
+      expect(find.text("That code isn't right. Try again."), findsOneWidget);
+      expect(tester.widget<TextFormField>(field('Code')).controller!.text, isEmpty);
+      expect(env.auth.user?.phone, testPhone);
+    });
+
+    testWidgets('a number someone else uses is rejected before any code is sent', (tester) async {
+      final env = await openProfile(
+        tester,
+        () => userJson(phone: testPhone, phoneVerified: true),
+        extra: (r) async {
+          if (r.url.path.endsWith('/auth/phone/change')) {
+            return apiError(409, 'PHONE_TAKEN', 'An account with this phone number already exists.');
+          }
+          return null;
+        },
+      );
+      await tester.tap(find.byTooltip('Change mobile number'));
+      await tester.pumpAndSettle();
+      await tester.enterText(field('New mobile number'), '9876500001');
+      await tester.tap(find.widgetWithText(FilledButton, 'Send code'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('An account with this phone number already exists.'), findsOneWidget);
+      expect(find.text('Enter the code'), findsNothing);
+      expect(env.to('/auth/phone/change/verify'), isEmpty);
+    });
+
+    testWidgets('"Verify now" texts the saved number and verifies it', (tester) async {
+      var verified = false;
+      final env = await openProfile(
+        tester,
+        () => userJson(phone: testPhone, phoneVerified: verified),
+        extra: (r) async {
+          final path = r.url.path;
+          if (path.endsWith('/auth/otp/send')) return codeSent();
+          if (path.endsWith('/auth/otp/verify')) {
+            verified = true;
+            return json(204, {});
+          }
+          return null;
+        },
+      );
+      expect(find.text('Not verified'), findsOneWidget);
+
+      await tester.tap(find.text('Verify now'));
+      await tester.pumpAndSettle();
+      expect(env.to('/auth/otp/send'), hasLength(1));
+      expect(find.text('We sent a 6-digit code to +91 98765 43210.'), findsOneWidget);
+
+      await tester.enterText(field('Code'), '123456');
+      await tester.pumpAndSettle();
+      expect(env.to('/auth/otp/verify').single.body, contains('"code":"123456"'));
+      expect(find.text('Verified'), findsOneWidget);
+      expect(find.text('Not verified'), findsNothing);
+    });
+
+    testWidgets('signs out', (tester) async {
+      final env = await openProfile(tester, () => userJson(phone: testPhone, phoneVerified: true));
+      await tester.scrollUntilVisible(find.text('Sign out'), 200, scrollable: find.byType(Scrollable).first);
+      await tester.tap(find.text('Sign out'));
+      await tester.pumpAndSettle();
+      expect(find.text("Let's get you riding"), findsOneWidget);
+      expect(env.auth.status, AuthStatus.signedOut);
+    });
   });
 }
