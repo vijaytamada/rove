@@ -48,8 +48,9 @@ Customers sign in with phone number + one-time code (`/auth/phone/request|verify
 5. Do not add a dependency unless it is actually needed now.
 6. **Keep the docs current with every piece of work, in the same commit as the code, so no information is lost between sessions.** Update whatever the change touches: this file (current state, auth model, branches), `docs/PHASES.md` (status), `docs/API.md` (endpoints, error codes), `docs/DATABASE.md`, `docs/RBAC.md`, `docs/UI.md`, `docs/ARCHITECTURE.md`, `docs/DEV_SETUP.md`, `docs/TESTING.md` (test counts, new findings, known limitations), the READMEs, and add every product/architecture decision to `docs/PROJECT_PLAN.md` → Decision Log. Before finishing a task, check these for stale statements (search for the old behaviour), not just the file you expected.
    Keep a one-paragraph "Current state" below up to date: what works, what is in progress, what is next.
-7. If a requirement is ambiguous, state the ambiguity and pick the simplest reasonable option; record it in the Decision Log.
-8. Keep it simple: no microservices, no CQRS/event-sourcing, no premature optimization.
+7. **Keep the website and the Flutter app in sync.** A customer-facing logic or UI change on one is made on the other in the same task (same flow, wording, validation, layout intent), with tests on both. The staff/admin console is web-only by design, so console-only changes need no app counterpart. Verify the app with `flutter analyze` + `flutter test`, and on the Android emulator (`Rove_Pixel`) for anything visual.
+8. If a requirement is ambiguous, state the ambiguity and pick the simplest reasonable option; record it in the Decision Log.
+9. Keep it simple: no microservices, no CQRS/event-sourcing, no premature optimization.
 
 ## Architecture rules
 - Every external service (OTP, KYC, payment, notification, telemetry) is behind an **interface + injection token**. Mock implementation is the default. Business modules depend on the interface only. Provider is chosen by env var (e.g. `PAYMENT_PROVIDER=mock`). See `docs/ARCHITECTURE.md` §Provider abstraction.
