@@ -4,6 +4,7 @@ import { useActionState, useEffect, useRef, useState } from "react";
 import { phoneLogin, type PhoneLoginState } from "@/app/actions/auth";
 import { FormMessage } from "@/components/app/FormMessage";
 import { SubmitButton } from "@/components/app/SubmitButton";
+import { OtpInput } from "@/components/app/OtpInput";
 import { TextField } from "@/components/app/TextField";
 import { formatPhone } from "@/lib/phone";
 
@@ -103,31 +104,28 @@ function CodeStep({
   devHint: boolean;
   onComplete: () => void;
 }) {
-  const input = useRef<HTMLInputElement>(null);
+  const [code, setCode] = useState("");
+  const [focusSignal, setFocusSignal] = useState(0);
 
-  // After a wrong code the form resets; put the cursor back so they can retype straight away.
+  // A wrong code clears the boxes and puts the cursor back on the first one.
+  const [seen, setSeen] = useState(state);
+  if (seen !== state) {
+    setSeen(state);
+    if (state.fieldErrors?.code || state.error) {
+      setCode("");
+      setFocusSignal((n) => n + 1);
+    }
+  }
+
+  // Submit as soon as the sixth digit lands (the hidden input has the full code by then).
   useEffect(() => {
-    if (state.fieldErrors?.code || state.error) input.current?.focus();
-  }, [state]);
+    if (code.length === 6 && !pending) onComplete();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [code]);
 
   return (
     <>
-      <TextField
-        ref={input}
-        label="Code"
-        name="code"
-        inputMode="numeric"
-        autoComplete="one-time-code"
-        pattern="[0-9]*"
-        maxLength={6}
-        placeholder="123456"
-        error={state.fieldErrors?.code}
-        onChange={(e) => {
-          if (e.currentTarget.value.replace(/\D/g, "").length === 6 && !pending) onComplete();
-        }}
-        autoFocus
-        required
-      />
+      <OtpInput name="code" value={code} onChange={setCode} error={state.fieldErrors?.code} focusSignal={focusSignal} />
       {devHint && <p className="text-sm text-ink-muted">Development mode: the code is always 123456.</p>}
       <SubmitButton>Verify</SubmitButton>
 

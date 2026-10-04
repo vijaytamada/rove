@@ -4,6 +4,7 @@ import 'package:http/http.dart' as http;
 import 'package:rove_app/auth/auth_controller.dart';
 import 'package:rove_app/main.dart';
 import 'package:rove_app/widgets/app_text_field.dart';
+import 'package:rove_app/widgets/otp_field.dart';
 
 import 'test_helpers.dart';
 
@@ -18,7 +19,7 @@ Future<void> pumpApp(WidgetTester tester, TestEnv env) async {
 
 /// The text input under a label (labels are rendered above the field, not inside it).
 Finder field(String label) => find.descendant(
-      of: find.ancestor(of: find.text(label), matching: find.byType(AppTextField)),
+      of: find.ancestor(of: find.text(label), matching: find.byWidgetPredicate((w) => w is AppTextField || w is OtpField)),
       matching: find.byType(TextFormField),
     );
 

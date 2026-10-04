@@ -74,6 +74,7 @@ These are the simplest reasonable defaults so Phases 4–6 can proceed; confirm 
 | 2026-10-03 | Public station listing shows availability by current status; time-window availability arrives with bookings in Phase 4 | Needs booking data |
 | 2026-10-03 | Demo data uses a fictional vehicle brand (Voltra) | No claims about real products |
 | 2026-10-04 | Git: `main` = stable, `dev` = integration (level on 2026-10-04, then `dev` runs ahead); all changes are made on `feature/*` branches cut from `dev` and merged into `dev` (`--no-ff`) when done; `dev` is merged into `main` once several features are stable and the full re-test passes. Customer sign-in field is India-only (+91 prefix, 10 digits) for now | Simple model; other country codes can be added later |
+| 2026-10-04 | Admin console redesigned: full-width lists, "Add ..." opens a modal form, forms show only fields for the chosen role, tables become cards on phones, sidebar only from 1280px; one-time codes entered in separate boxes (web + Flutter). City managers keep adding station employees for stations in their cities (backend rule unchanged) | Side-by-side table + form squeezed both; the long staff form showed fields that did not apply |
 
 ## 8. Open questions
 See the end of the planning summary / `docs/PHASES.md` §Open decisions. Resolve before the phase noted.
