@@ -94,13 +94,16 @@ class ProfileTab extends StatelessWidget {
 
 /// One line of the details card: small label, the value, and a pencil on the right when it can be edited.
 class _DetailRow extends StatelessWidget {
-  const _DetailRow({required this.label, required this.child, this.onEdit, this.editLabel, this.note});
+  const _DetailRow({required this.label, required this.child, this.onEdit, this.editLabel, this.note, this.noteIsSuccess = false});
 
   final String label;
   final Widget child;
   final VoidCallback? onEdit;
   final String? editLabel;
   final String? note;
+
+  /// Green confirmation ("Name updated") instead of the grey helper text.
+  final bool noteIsSuccess;
 
   @override
   Widget build(BuildContext context) {
@@ -116,7 +119,7 @@ class _DetailRow extends StatelessWidget {
               child,
               if (note != null) ...[
                 const SizedBox(height: 4),
-                Text(note!, style: const TextStyle(color: Tokens.inkMuted, fontSize: 13)),
+                Text(note!, style: TextStyle(color: noteIsSuccess ? Tokens.accentInk : Tokens.inkMuted, fontSize: noteIsSuccess ? 14 : 13)),
               ],
             ],
           ),
@@ -203,6 +206,7 @@ class _NameRowState extends State<_NameRow> {
         label: 'Full name',
         onEdit: () => _startEditing(user.fullName),
         note: _saved ? 'Name updated' : null,
+        noteIsSuccess: true,
         child: Text(user.fullName, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w500)),
       );
     }
@@ -268,6 +272,7 @@ class _PhoneRowState extends State<_PhoneRow> {
       },
       editLabel: phone == null ? 'Add mobile number' : 'Change mobile number',
       note: _done,
+      noteIsSuccess: true,
       child: phone == null
           ? const Text('Not added', style: TextStyle(fontSize: 16, color: Tokens.inkMuted))
           : Wrap(
