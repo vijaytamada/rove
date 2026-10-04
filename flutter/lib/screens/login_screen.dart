@@ -2,13 +2,13 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart' show kReleaseMode;
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 
 import '../auth/auth_controller.dart';
 import '../auth/phone.dart';
 import '../theme/tokens.dart';
 import '../widgets/app_text_field.dart';
 import '../widgets/form_banner.dart';
+import '../widgets/otp_field.dart';
 import '../widgets/primary_button.dart';
 import '../widgets/wordmark.dart';
 
@@ -226,14 +226,8 @@ class _LoginScreenState extends State<LoginScreen> {
       ];
 
   List<Widget> _codeStep() => [
-        AppTextField(
-          label: 'Code',
+        OtpField(
           controller: _code,
-          hint: '123456',
-          keyboardType: TextInputType.number,
-          autofillHints: const [AutofillHints.oneTimeCode],
-          inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-          maxLength: 6,
           autofocus: true,
           errorText: _fieldError,
           onChanged: (value) {

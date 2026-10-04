@@ -76,7 +76,7 @@ Web: Tailwind + **shadcn/ui** (Radix) customized to the tokens above. Flutter: M
 | Toast | `sonner` | `SnackBar` |
 
 ## 6. Customer screens (MVP)
-1. Sign in (phone + code). One screen with three steps, no separate "create account": **phone** (fixed `+91` prefix, then 10 digits; India only for now) -> **code** (6 digits, submits by itself at the sixth, one-time-code autofill, resend countdown, "Change number") -> **name**, only for a number we haven't seen (this creates the account). Development builds show "the code is always 123456". The website adds a "Staff sign in" link to `/login/staff` (email + password, for station employees, managers and admins); `/register` redirects to `/login`. The Flutter app is customer-only, so it has no staff sign-in
+1. Sign in (phone + code). One screen with three steps, no separate "create account": **phone** (fixed `+91` prefix, then 10 digits; India only for now) -> **code** (six separate boxes, one per digit; typing advances, Backspace goes back, pasting or autofill fills them all; submits by itself at the sixth digit; resend countdown, "Change number") -> **name**, only for a number we haven't seen (this creates the account). Development builds show "the code is always 123456". The website adds a "Staff sign in" link to `/login/staff` (email + password, for station employees, managers and admins); `/register` redirects to `/login`. The Flutter app is customer-only, so it has no staff sign-in
 2. Home: city/station selector, scooters at the station, active-rental card
 3. Stations list → station detail
 4. Scooter list (photo, model, battery, range, price/hr, availability)
@@ -102,6 +102,14 @@ frontend/src/
   lib/api/             # typed API client (OpenAPI-generated when stable)
   styles/tokens.css
 ```
+
+### Admin console layout rules (2026-10-04)
+- Lists are **full width**. Nothing sits beside a table. "Add ..." is a button in the page header (`<AddDialog>`) that opens a modal form; the modal closes itself after a successful save (`ActionForm` calls the dialog's close).
+- Forms use `<FormGrid>`: two columns from 640px, one on phones. Give a field `wide` to span both.
+- Forms show only what applies. The staff form (`<StaffCreateForm>`) shows the stations picker for a station employee, the cities picker for a city manager, and neither for a super admin. A city manager only gets "Station employee" (no role picker).
+- Tables are `<TableWrap>` + `<Td label="...">`. Below 768px each row reflows into a labelled card (CSS class `rtable` in `globals.css`), so nothing scrolls sideways on phones. Pass `label` on every data cell; leave it off the actions cell.
+- The sidebar appears from 1280px; below that the console uses the top bar with scrolling links.
+- One-time codes use `<OtpInput>` (web) / `OtpField` (Flutter): one box per digit.
 
 ## 9. Rules
 - Build from shared components; no one-off styling; no hard-coded colors (tokens only).

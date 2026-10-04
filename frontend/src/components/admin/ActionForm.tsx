@@ -1,6 +1,7 @@
 "use client";
 
 import { createContext, useActionState, useContext, useEffect, useRef, type ReactNode } from "react";
+import { useDialogClose } from "./AddDialog";
 import { FormMessage } from "@/components/app/FormMessage";
 import { SubmitButton } from "@/components/app/SubmitButton";
 import type { FormState } from "@/lib/form";
@@ -32,9 +33,13 @@ export function ActionForm({
   const [state, formAction] = useActionState<FormState, FormData>(action, {});
   const ref = useRef<HTMLFormElement>(null);
 
+  const closeDialog = useDialogClose();
+
   useEffect(() => {
-    if (state.ok && resetOnSuccess) ref.current?.reset();
-  }, [state, resetOnSuccess]);
+    if (!state.ok) return;
+    if (resetOnSuccess) ref.current?.reset();
+    closeDialog?.();
+  }, [state, resetOnSuccess, closeDialog]);
 
   return (
     <FormStateContext.Provider value={state}>

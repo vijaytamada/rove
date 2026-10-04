@@ -18,7 +18,7 @@ export function NavLink({ href, children, variant = "top", exact }: Props) {
   const active = exact ? pathname === href : pathname === href || pathname.startsWith(`${href}/`);
   const base =
     variant === "top"
-      ? "rounded-full px-3.5 py-2 text-sm"
+      ? "shrink-0 whitespace-nowrap rounded-full px-3.5 py-2 text-sm"
       : "flex items-center gap-2 rounded-control px-3 py-2.5 text-sm";
   const state = active ? "bg-canvas font-medium text-ink" : "text-ink-muted hover:bg-canvas hover:text-ink";
   return (

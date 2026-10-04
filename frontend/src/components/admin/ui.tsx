@@ -6,12 +6,12 @@ import type { VehicleStatus } from "@/lib/types";
 
 export function PageHeader({ title, description, action }: { title: string; description?: string; action?: ReactNode }) {
   return (
-    <div className="mb-8 flex flex-wrap items-start justify-between gap-4">
-      <div>
-        <h1 className="text-3xl font-semibold tracking-tight">{title}</h1>
-        {description && <p className="mt-2 text-ink-muted">{description}</p>}
+    <div className="mb-8 flex flex-wrap items-end justify-between gap-x-6 gap-y-4">
+      <div className="min-w-0">
+        <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">{title}</h1>
+        {description && <p className="mt-1.5 text-ink-muted">{description}</p>}
       </div>
-      {action}
+      {action && <div className="shrink-0">{action}</div>}
     </div>
   );
 }
@@ -39,19 +39,22 @@ export function ErrorBanner({ message: code }: { message?: string }) {
 export function TableWrap({ children }: { children: ReactNode }) {
   return (
     <div className="overflow-x-auto rounded-card border border-line bg-surface">
-      <table className="w-full min-w-[36rem] text-left text-sm">{children}</table>
+      <table className="rtable w-full text-left text-sm md:min-w-[40rem] [&_tbody_tr:last-child_td]:border-b-0">{children}</table>
     </div>
   );
 }
 
 export const Th = ({ children, className = "" }: { children?: ReactNode; className?: string }) => (
-  <th scope="col" className={`border-b border-line px-4 py-3 text-xs font-medium uppercase tracking-wide text-ink-muted ${className}`}>
+  <th scope="col" className={`border-b border-line bg-canvas/50 px-5 py-3 text-xs font-medium uppercase tracking-wide text-ink-muted ${className}`}>
     {children}
   </th>
 );
 
-export const Td = ({ children, className = "" }: { children?: ReactNode; className?: string }) => (
-  <td className={`border-b border-line px-4 py-3 align-middle last:border-b-0 ${className}`}>{children}</td>
+/** `label` is shown beside the value when the table reflows into cards on phones. */
+export const Td = ({ children, className = "", label }: { children?: ReactNode; className?: string; label?: string }) => (
+  <td data-label={label} className={`border-b border-line px-5 py-4 align-middle ${className}`}>
+    <div className="cell">{children}</div>
+  </td>
 );
 
 export function EmptyRow({ colSpan, children }: { colSpan: number; children: ReactNode }) {
