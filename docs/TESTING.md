@@ -28,7 +28,7 @@ Notes
 | API sweep | 70 checks: every route in the OpenAPI spec rejects anonymous (401) and wrong-role (403) calls; hostile/malformed input gives clean 4xx with no leaks; headers; CORS; JWT tampering; refresh-token misuse; login throttling |
 | Concurrency | 6 probes: station capacity (create and move), duplicate vehicle code, duplicate city, parallel sign-ups for one new phone number (two tickets), parallel status/update, parallel refresh |
 | Database | Fresh database built from all migrations + seed run twice (idempotent); CHECK constraints; no leftover test rows |
-| On device | Android emulator (Pixel 8, Android 15): sign in, session survives app restart, stations and scooters, backend outage and recovery |
+| On device | Android emulator (Pixel 8, Android 15): sign in, session survives app restart, stations and scooters, backend outage and recovery; 2026-10-04: sign-in code boxes (typing, wrong code), read-only profile, inline name edit, two-step phone change (wrong code keeps the old number, right code saves it), keyboard does not cover the sheet |
 
 Manually driven in the browser (Chromium): create/hide/show city; create/edit/close/reopen station (validation, duplicates, hours); create model; add scooters until the station is full; status change; edit and move; retire; create/disable staff; city manager scoping including a tampered form; phone-width layout of every console page.
 
