@@ -163,6 +163,48 @@ void main() {
     expect(env.auth.user?.phoneVerified, isTrue);
   });
 
+  test('updateProfile sends only the trimmed name', () async {
+    final env = TestEnv((r) async => json(200, userJson(name: 'Asha K', phone: testPhone, phoneVerified: true)));
+    final error = await env.auth.updateProfile(fullName: '  Asha K ');
+    expect(error, isNull);
+    expect(env.requests.single.method, 'PATCH');
+    expect(env.requests.single.body, contains('"fullName":"Asha K"'));
+    expect(env.requests.single.body, isNot(contains('phone')));
+    expect(env.auth.user?.fullName, 'Asha K');
+  });
+
+  test('changing the phone: the code goes to the new number and the user is updated only on confirm', () async {
+    var saved = testPhone;
+    final env = TestEnv((r) async {
+      if (r.url.path.endsWith('/auth/phone/change/verify')) {
+        saved = '+919876500001';
+        return json(204, {});
+      }
+      if (r.url.path.endsWith('/auth/phone/change')) return codeSent();
+      return json(200, userJson(phone: saved, phoneVerified: true));
+    });
+    await env.auth.updateProfile(fullName: 'Asha Kumar');
+    expect(env.auth.user?.phone, testPhone);
+
+    final sent = await env.auth.startPhoneChange('+919876500001');
+    expect(sent.error, isNull);
+    expect(sent.resendAfterSeconds, 30);
+    expect(env.to('/auth/phone/change').single.body, contains('"phone":"+919876500001"'));
+    expect(env.auth.user?.phone, testPhone); // still the old number
+
+    final error = await env.auth.confirmPhoneChange(' 123456 ');
+    expect(error, isNull);
+    expect(env.to('/auth/phone/change/verify').single.body, contains('"code":"123456"'));
+    expect(env.auth.user?.phone, '+919876500001');
+    expect(env.auth.user?.phoneVerified, isTrue);
+  });
+
+  test('startPhoneChange reports a number that is taken', () async {
+    final env = TestEnv((r) async => apiError(409, 'PHONE_TAKEN', 'An account with this phone number already exists.'));
+    final result = await env.auth.startPhoneChange('+919876500001');
+    expect(result.error?.code, 'PHONE_TAKEN');
+  });
+
   test('wrong OTP code returns the error', () async {
     final env = TestEnv((r) async => apiError(400, 'OTP_INVALID', "That code isn't right. Try again."));
     final error = await env.auth.verifyPhoneCode('000000');

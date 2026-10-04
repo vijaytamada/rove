@@ -11,8 +11,6 @@ import type { AuthResult, CodeSent, PhoneVerifyResult, UserView } from "@/lib/ty
 
 export type { FormState } from "@/lib/form";
 
-const optional = (form: FormData, name: string) => text(form, name).replace(/\s+/g, "") || undefined;
-
 export async function login(_prev: FormState, form: FormData): Promise<FormState> {
   const res = await apiRequest<AuthResult>("/auth/login", {
     body: { email: text(form, "email"), password: String(form.get("password") ?? "") },
@@ -105,31 +103,59 @@ export async function logout(): Promise<void> {
   redirect("/login");
 }
 
+/** Edits the profile name. The phone number changes through its own verified flow (below). */
 export async function updateProfile(_prev: FormState, form: FormData): Promise<FormState> {
   const token = await getAccessToken();
   if (!token) redirect("/login?next=/profile");
-  const body: Record<string, string> = { fullName: text(form, "fullName") };
-  const phone = optional(form, "phone");
-  if (phone) body.phone = phone;
+  const fullName = text(form, "fullName");
 
-  const res = await apiRequest<UserView>("/me", { method: "PATCH", body, token });
-  if (!res.ok) return { ...failure(res), values: { fullName: text(form, "fullName"), phone: text(form, "phone") } };
-  revalidatePath("/profile");
-  return { ok: true, message: "Profile saved" };
+  const res = await apiRequest<UserView>("/me", { method: "PATCH", body: { fullName }, token });
+  if (!res.ok) return { ...failure(res), values: { fullName } };
+  revalidatePath("/", "layout");
+  return { ok: true, message: "Name updated" };
 }
 
-export async function sendPhoneCode(): Promise<FormState> {
-  const token = await getAccessToken();
-  if (!token) redirect("/login?next=/profile");
-  const res = await apiRequest("/auth/otp/send", { method: "POST", body: {}, token });
-  return res.ok ? { ok: true, message: "Code sent" } : failure(res);
+/** Outcome of a profile phone step; `resendAfter` is the seconds before another code may be sent. */
+export interface PhoneStepResult extends FormState {
+  resendAfter?: number;
 }
 
-export async function verifyPhoneCode(_prev: FormState, form: FormData): Promise<FormState> {
+/** Step 1 of changing the phone: send a code to the new number. Nothing is saved yet. */
+export async function startPhoneChange(phone: string): Promise<PhoneStepResult> {
   const token = await getAccessToken();
   if (!token) redirect("/login?next=/profile");
-  const res = await apiRequest("/auth/otp/verify", { method: "POST", body: { code: text(form, "code") }, token });
-  if (!res.ok) return failure(res);
-  revalidatePath("/profile");
+  const res = await apiRequest<CodeSent>("/auth/phone/change", { method: "POST", body: { phone: normalizePhone(phone) }, token });
+  if (!res.ok) {
+    if (res.code === "VALIDATION_ERROR") return { fieldErrors: { phone: "Enter your 10-digit mobile number." } };
+    if (res.code === "PHONE_UNCHANGED") return { fieldErrors: { phone: res.message } };
+    return failure(res);
+  }
+  return { ok: true, resendAfter: res.data.resendAfterSeconds };
+}
+
+/** Step 2: confirm the code. The new number is saved (and verified) only now. */
+export async function confirmPhoneChange(code: string): Promise<FormState> {
+  const token = await getAccessToken();
+  if (!token) redirect("/login?next=/profile");
+  const res = await apiRequest("/auth/phone/change/verify", { method: "POST", body: { code }, token });
+  if (!res.ok) return res.code === "VALIDATION_ERROR" ? { fieldErrors: { code: "Enter the 6-digit code." } } : failure(res);
+  revalidatePath("/", "layout");
+  return { ok: true, message: "Phone number updated" };
+}
+
+/** For a number that is already saved but not verified yet. */
+export async function sendPhoneCode(): Promise<PhoneStepResult> {
+  const token = await getAccessToken();
+  if (!token) redirect("/login?next=/profile");
+  const res = await apiRequest<CodeSent>("/auth/otp/send", { method: "POST", body: {}, token });
+  return res.ok ? { ok: true, resendAfter: res.data.resendAfterSeconds } : failure(res);
+}
+
+export async function verifyPhoneCode(code: string): Promise<FormState> {
+  const token = await getAccessToken();
+  if (!token) redirect("/login?next=/profile");
+  const res = await apiRequest("/auth/otp/verify", { method: "POST", body: { code }, token });
+  if (!res.ok) return res.code === "VALIDATION_ERROR" ? { fieldErrors: { code: "Enter the 6-digit code." } } : failure(res);
+  revalidatePath("/", "layout");
   return { ok: true, message: "Phone verified" };
 }

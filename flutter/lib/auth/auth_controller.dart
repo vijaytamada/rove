@@ -105,17 +105,33 @@ class AuthController extends ChangeNotifier {
     _set(AuthStatus.signedOut, null);
   }
 
-  Future<ApiError?> updateProfile({required String fullName, String? phone}) async {
-    final result = await api.patch('/me', body: {
-      'fullName': fullName.trim(),
-      if (phone != null && phone.trim().isNotEmpty) 'phone': phone.replaceAll(RegExp(r'\s+'), ''),
-    });
+  /// Edits the name. The phone number changes through [startPhoneChange] and [confirmPhoneChange].
+  Future<ApiError?> updateProfile({required String fullName}) async {
+    final result = await api.patch('/me', body: {'fullName': fullName.trim()});
     return _applyUser(result);
   }
 
-  Future<ApiError?> sendPhoneCode() async {
+  /// Changing the phone, step 1: text a code to the NEW number (E.164). Nothing is saved yet.
+  Future<CodeRequestResult> startPhoneChange(String phone) async {
+    final result = await api.post('/auth/phone/change', body: {'phone': phone});
+    if (result is ApiError) return CodeRequestResult(error: result);
+    final seconds = (result as ApiOk).json['resendAfterSeconds'];
+    return CodeRequestResult(resendAfterSeconds: seconds is int ? seconds : 30);
+  }
+
+  /// Step 2: the number is saved (and verified) only when the code is right.
+  Future<ApiError?> confirmPhoneChange(String code) async {
+    final result = await api.post('/auth/phone/change/verify', body: {'code': code.trim()});
+    if (result is ApiError) return result;
+    return _applyUser(await api.get('/me'));
+  }
+
+  /// For a number that is already saved but not verified.
+  Future<CodeRequestResult> sendPhoneCode() async {
     final result = await api.post('/auth/otp/send');
-    return result is ApiError ? result : null;
+    if (result is ApiError) return CodeRequestResult(error: result);
+    final seconds = (result as ApiOk).json['resendAfterSeconds'];
+    return CodeRequestResult(resendAfterSeconds: seconds is int ? seconds : 30);
   }
 
   Future<ApiError?> verifyPhoneCode(String code) async {

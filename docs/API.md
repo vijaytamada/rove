@@ -25,9 +25,11 @@ REST + JSON, prefix `/api/v1`, Swagger UI at `/api/docs`, OpenAPI JSON at `/api/
 | `POST /auth/login` | public | **Staff, city managers and admins** (email + password). A customer can never use it. Same error for unknown email and wrong password (`INVALID_CREDENTIALS`); disabled accounts get `ACCOUNT_DISABLED`. There is no public registration: `POST /auth/register` was removed |
 | `POST /auth/refresh` | public | Body `{ refreshToken }`. Rotates: old token is revoked, new pair returned. Reusing a revoked token revokes all sessions (`INVALID_REFRESH_TOKEN`) |
 | `POST /auth/logout` | public | Body `{ refreshToken }`; 204 |
-| `POST /auth/otp/send` | signed in | Sends a code to verify a phone number changed in the profile (mock: always `123456`, dev only). Same limits as sign-in codes |
+| `POST /auth/phone/change` | signed in | **Change the profile phone, step 1.** Body `{ phone }` (E.164, the NEW number). Sends a code to it; nothing is saved yet. `PHONE_TAKEN` (409) if another account uses it, `PHONE_UNCHANGED` (409) if it is already your verified number. Returns `{ expiresInSeconds, resendAfterSeconds }`. Same limits as sign-in codes |
+| `POST /auth/phone/change/verify` | signed in | **Step 2.** Body `{ code }`; 204. The new number is saved and marked verified only now. `OTP_EXPIRED` if no change is pending; 5 wrong attempts lock the challenge |
+| `POST /auth/otp/send` | signed in | For a number that is already saved but unverified (for example a staff phone added by an admin): sends a code to it (mock: always `123456`, dev only). Same limits as sign-in codes |
 | `POST /auth/otp/verify` | signed in | Body `{ code }`; 204. 5 wrong attempts lock the challenge |
-| `GET /me` · `PATCH /me` | signed in | Profile incl. `phoneVerified` and `scope { cityIds, stationIds }`. `PATCH` accepts `fullName`, `phone` (changing phone resets verification) |
+| `GET /me` · `PATCH /me` | signed in | Profile incl. `phoneVerified` and `scope { cityIds, stationIds }`. `PATCH` accepts `fullName` only; sending `phone` is rejected (400). The phone changes through `/auth/phone/change` |
 | `POST /users` | SUPER_ADMIN (managers: employees only, see Phase 3) | Create `CITY_MANAGER` / `STATION_EMPLOYEE` / `SUPER_ADMIN` with optional `assignments` |
 | `GET /users?role&page&limit` · `GET /users/:id` | SUPER_ADMIN (managers: their employees) | |
 | `PATCH /users/:id` | SUPER_ADMIN (managers: their employees) | `fullName`, `status`. Disabling revokes the user's sessions; can't disable yourself |
@@ -36,7 +38,7 @@ REST + JSON, prefix `/api/v1`, Swagger UI at `/api/docs`, OpenAPI JSON at `/api/
 Tokens: access token = JWT (15 min, `Authorization: Bearer`); refresh token = opaque random string (30 days), stored hashed.
 Staff login is throttled: 10 failed attempts per email in 15 minutes returns 429 `TOO_MANY_ATTEMPTS`. Oversized bodies return 413 `PAYLOAD_TOO_LARGE`.
 Sign-in codes are limited per phone number and overall: 30 s between sends (`OTP_RESEND_TOO_SOON`), 5 sends per number per hour (`OTP_TOO_MANY_REQUESTS`), 5 wrong attempts per code (`OTP_TOO_MANY_ATTEMPTS`), and a daily cap on all sends, `OTP_DAILY_SEND_CAP` (default 5000), after which sending returns 503 `OTP_UNAVAILABLE`. Codes last 5 minutes (`OTP_EXPIRED`).
-Error codes added: `UNAUTHENTICATED`, `INVALID_TOKEN`, `INVALID_CREDENTIALS`, `ACCOUNT_DISABLED`, `INVALID_REFRESH_TOKEN`, `EMAIL_TAKEN`, `PHONE_TAKEN`, `PHONE_REQUIRED`, `PHONE_ALREADY_VERIFIED`, `OTP_INVALID`, `OTP_EXPIRED`, `OTP_RESEND_TOO_SOON`, `OTP_TOO_MANY_ATTEMPTS`, `OTP_TOO_MANY_REQUESTS`, `OTP_UNAVAILABLE`, `SIGNUP_EXPIRED`, `FORBIDDEN_ROLE`, `FORBIDDEN_SCOPE`, `INVALID_ASSIGNMENT`, `INVALID_ROLE`, `CANNOT_DISABLE_SELF`, `USER_NOT_FOUND`, `VALIDATION_ERROR`.
+Error codes added: `UNAUTHENTICATED`, `INVALID_TOKEN`, `INVALID_CREDENTIALS`, `ACCOUNT_DISABLED`, `INVALID_REFRESH_TOKEN`, `EMAIL_TAKEN`, `PHONE_TAKEN`, `PHONE_REQUIRED`, `PHONE_ALREADY_VERIFIED`, `PHONE_UNCHANGED`, `OTP_INVALID`, `OTP_EXPIRED`, `OTP_RESEND_TOO_SOON`, `OTP_TOO_MANY_ATTEMPTS`, `OTP_TOO_MANY_REQUESTS`, `OTP_UNAVAILABLE`, `SIGNUP_EXPIRED`, `FORBIDDEN_ROLE`, `FORBIDDEN_SCOPE`, `INVALID_ASSIGNMENT`, `INVALID_ROLE`, `CANNOT_DISABLE_SELF`, `USER_NOT_FOUND`, `VALIDATION_ERROR`.
 
 ### Phase 3 — Network & fleet (implemented)
 Public (no sign-in):
