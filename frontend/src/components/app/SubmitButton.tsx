@@ -8,7 +8,7 @@ interface Props extends ButtonHTMLAttributes<HTMLButtonElement> {
 }
 
 /** Primary = solid ink pill (one per screen). Secondary = outline. Shows progress while submitting. */
-export function SubmitButton({ variant = "primary", children, className = "", ...rest }: Props) {
+export function SubmitButton({ variant = "primary", children, className = "", disabled, ...rest }: Props) {
   const { pending } = useFormStatus();
   const style =
     variant === "primary"
@@ -17,7 +17,7 @@ export function SubmitButton({ variant = "primary", children, className = "", ..
   return (
     <button
       type="submit"
-      disabled={pending}
+      disabled={pending || disabled}
       aria-busy={pending}
       className={`h-12 w-full rounded-full text-base font-medium transition-colors disabled:opacity-60 ${style} ${className}`}
       {...rest}

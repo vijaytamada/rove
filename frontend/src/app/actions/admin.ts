@@ -3,7 +3,7 @@
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { apiRequest } from "@/lib/api";
-import { failure, num, optional, phone, text, valuesOf, type FormState } from "@/lib/form";
+import { failure, num, optional, paise, phone, text, valuesOf, type FormState } from "@/lib/form";
 import { getAccessToken } from "@/lib/session";
 
 type Method = "POST" | "PATCH" | "PUT" | "DELETE";
@@ -116,6 +116,41 @@ export async function createModel(_prev: FormState, form: FormData): Promise<For
 
 export async function setModelActive(id: string, isActive: boolean): Promise<void> {
   await click("PATCH", `/vehicle-models/${id}`, { isActive }, "/admin/models");
+}
+
+// ---------------- Pricing plans ----------------
+
+/** Plan form fields are typed in rupees; the API takes paise. */
+function planBody(form: FormData) {
+  return {
+    hourlyRateAmount: paise(form, "hourlyRateAmount"),
+    includedKmPerHour: num(form, "includedKmPerHour"),
+    extraKmRateAmount: paise(form, "extraKmRateAmount"),
+    lateFeePerHourAmount: paise(form, "lateFeePerHourAmount"),
+    graceMinutes: num(form, "graceMinutes"),
+    depositAmount: paise(form, "depositAmount"),
+  };
+}
+
+export async function createPlan(_prev: FormState, form: FormData): Promise<FormState> {
+  return submit(
+    "POST",
+    "/pricing-plans",
+    { modelId: text(form, "modelId"), cityId: optional(form, "cityId"), dailyRateAmount: paise(form, "dailyRateAmount"), ...planBody(form) },
+    form,
+    { message: "Plan added", revalidate: ["/admin/pricing"] },
+  );
+}
+
+export async function updatePlan(id: string, _prev: FormState, form: FormData): Promise<FormState> {
+  // An empty day rate means no day rate: send an explicit null so the API clears it.
+  return submit(
+    "PATCH",
+    `/pricing-plans/${id}`,
+    { ...planBody(form), dailyRateAmount: paise(form, "dailyRateAmount") ?? null, isActive: text(form, "status") === "ACTIVE" },
+    form,
+    { message: "Plan saved", revalidate: ["/admin/pricing", `/admin/pricing/${id}`] },
+  );
 }
 
 // ---------------- Vehicles ----------------

@@ -6,6 +6,7 @@ import { Prisma, type Station, type Vehicle, type VehicleModel, type VehicleStat
 import { PrismaService } from '../../infra/prisma/prisma.service.js';
 import { liveBookingOverlap, liveBookingWhere } from '../bookings/booking-availability.js';
 import { resolveWindow } from '../bookings/booking-rules.js';
+import { toStationSummary, type StationSummary } from '../bookings/booking-views.js';
 import type { AvailabilityQuery } from '../bookings/dto/booking.dto.js';
 import { PricingPlansService, type PricingView } from '../pricing/pricing-plans.service.js';
 import { ScopeService } from '../rbac/scope.service.js';
@@ -95,6 +96,20 @@ export class VehiclesService {
     });
     const pricing = await this.plans.resolveForModels(station.cityId, [...new Set(vehicles.map((v) => v.modelId))]);
     return vehicles.map((v) => ({ ...toPublic(v), pricing: pricing.get(v.modelId) ?? null }));
+  }
+
+  /** Public: one scooter with its station and price, for the booking page. Shown even when it is booked right now. */
+  async getPublic(id: string): Promise<{ vehicle: VehicleBrowseView; station: StationSummary }> {
+    const vehicle = await this.prisma.vehicle.findFirst({
+      where: { id, retiredAt: null, model: { isActive: true }, station: { is: { status: 'ACTIVE', city: { isActive: true } } } },
+      include: { model: true, station: { include: { city: true } } },
+    });
+    if (!vehicle?.station) throw new AppException(404, 'VEHICLE_NOT_FOUND', 'Scooter not found.');
+    const pricing = await this.plans.resolveForModels(vehicle.station.cityId, [vehicle.modelId]);
+    return {
+      vehicle: { ...toPublic(vehicle), pricing: pricing.get(vehicle.modelId) ?? null },
+      station: toStationSummary(vehicle.station),
+    };
   }
 
   async listManage(user: AuthUser, query: ListVehiclesQuery): Promise<Page<VehicleManageView>> {

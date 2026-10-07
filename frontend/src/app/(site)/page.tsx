@@ -1,5 +1,7 @@
 import { ButtonLink } from "@/components/app/ButtonLink";
+import { BookingCard } from "@/components/booking/BookingCard";
 import { homeFor } from "@/lib/access";
+import { getNextBooking } from "@/lib/bookings";
 import { getCurrentUser } from "@/lib/dal";
 
 export const dynamic = "force-dynamic";
@@ -15,6 +17,7 @@ export default async function Home() {
   const user = await getCurrentUser();
   const consoleHref = user && user.role !== "CUSTOMER" ? homeFor(user.role) : null;
   const firstName = user?.fullName.split(" ")[0];
+  const next = user?.role === "CUSTOMER" ? await getNextBooking() : null;
 
   return (
     <div className="grid items-center gap-10 lg:grid-cols-2 lg:gap-16 lg:py-8">
@@ -27,9 +30,18 @@ export default async function Home() {
           {user
             ? consoleHref
               ? "Your console is ready."
-              : "Browse stations and see which scooters are available. Booking arrives in a later phase."
+              : "Find a station, pick a scooter and book it in a minute."
             : "Pick up at a station near you, ride, and drop it off at any station in your city. Simple pricing and a refundable deposit."}
         </p>
+
+        {next && (
+          <div className="mt-8 max-w-md">
+            <h2 className="mb-3 text-sm font-medium text-ink-muted">
+              {next.status === "PENDING_PAYMENT" ? "Finish your booking" : "Your booking"}
+            </h2>
+            <BookingCard booking={next} />
+          </div>
+        )}
 
         <div className="mt-8 flex max-w-md flex-col gap-3 sm:flex-row">
           {user ? (

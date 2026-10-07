@@ -41,6 +41,12 @@ export class VehiclesController {
     return this.vehicles.listPublic(stationId, query);
   }
 
+  @Public()
+  @Get('vehicles/:id')
+  getPublic(@Param('id', ParseUUIDPipe) id: string) {
+    return this.vehicles.getPublic(id);
+  }
+
   // ---- Vehicle models (global catalogue; super admin writes) ----
 
   @ApiBearerAuth()

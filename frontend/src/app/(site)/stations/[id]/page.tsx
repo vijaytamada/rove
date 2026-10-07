@@ -43,12 +43,12 @@ export default async function StationPage({ params }: { params: Promise<{ id: st
       </div>
 
       <h2 className="mt-10 text-lg font-semibold tracking-tight">
-        Available scooters{vehicles ? ` (${vehicles.length})` : ""}
+        Available now{vehicles ? ` (${vehicles.length})` : ""}
       </h2>
       {vehicles === null ? (
         <p className="mt-4 text-ink-muted">We can&apos;t load scooters right now. Try again in a moment.</p>
       ) : vehicles.length === 0 ? (
-        <p className="mt-4 text-ink-muted">No scooters are available here right now. Try another station.</p>
+        <p className="mt-4 text-ink-muted">No scooters are free here right now. Try another station.</p>
       ) : (
         <ul className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {vehicles.map((v) => (
@@ -58,7 +58,6 @@ export default async function StationPage({ params }: { params: Promise<{ id: st
           ))}
         </ul>
       )}
-      <p className="mt-8 text-sm text-ink-muted">Booking arrives in a later phase.</p>
     </>
   );
 }

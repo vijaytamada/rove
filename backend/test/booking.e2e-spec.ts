@@ -515,6 +515,22 @@ describe('Booking: KYC, pricing, holds, payment and cancellation (e2e)', () => {
       expect(await count()).toBe(1);
     });
 
+    it('shows one scooter with its station and price, even while it is booked', async () => {
+      const setup = await t.makeBookable();
+      const customer = await t.verifiedCustomer();
+      await book(customer.auth, { vehicleId: setup.vehicleIds[0], hours: 1 }).expect(201);
+
+      const res = await t.http().get(`/api/v1/vehicles/${setup.vehicleIds[0]}`).expect(200);
+      expect(res.body.vehicle).toMatchObject({ id: setup.vehicleIds[0], pricing: { hourlyRateAmount: 5000 } });
+      expect(res.body.vehicle.registrationNumber).toBeUndefined();
+      expect(res.body.station).toMatchObject({ id: setup.stationId, timezone: 'Asia/Kolkata' });
+
+      const retired = await t.makeVehicle(setup.stationId, setup.modelId);
+      await t.prisma.vehicle.update({ where: { id: retired.id }, data: { retiredAt: new Date() } });
+      await t.http().get(`/api/v1/vehicles/${retired.id}`).expect(404);
+      await t.http().get('/api/v1/vehicles/nope').expect(400);
+    });
+
     it('lists a scooter without a price but marks it as such', async () => {
       const setup = await t.makeBookable();
       const noPlan = await t.makeVehicle(setup.stationId, (await t.makeModel()).id);

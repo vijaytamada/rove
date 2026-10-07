@@ -1,6 +1,8 @@
+import Link from "next/link";
 import { logout } from "@/app/actions/auth";
 import { StatusChip } from "@/components/app/StatusChip";
 import { SubmitButton } from "@/components/app/SubmitButton";
+import { getKyc } from "@/lib/bookings";
 import { requireUser } from "@/lib/dal";
 import { formatPhone } from "@/lib/phone";
 import type { Role } from "@/lib/types";
@@ -19,6 +21,7 @@ const ROLE_LABEL: Record<Role, string> = {
 
 export default async function ProfilePage() {
   const user = await requireUser("/profile");
+  const kyc = user.role === "CUSTOMER" ? await getKyc() : null;
   const initials = user.fullName
     .split(/\s+/)
     .filter(Boolean)
@@ -59,6 +62,21 @@ export default async function ProfilePage() {
           <div>
             <EditableName fullName={user.fullName} />
             <PhoneRow phone={user.phone} verified={user.phoneVerified} devHint={process.env.NODE_ENV !== "production"} />
+            {kyc && (
+              <DetailRow label="Identity check">
+                {kyc.status === "VERIFIED" ? (
+                  <StatusChip tone="success">Verified</StatusChip>
+                ) : (
+                  <div className="flex flex-wrap items-center gap-3">
+                    <StatusChip tone="warning">Not verified</StatusChip>
+                    <Link href="/verify?next=/profile" className="text-sm font-medium underline">
+                      Verify now
+                    </Link>
+                  </div>
+                )}
+                <p className="mt-1 text-sm text-ink-muted">Needed once, before your first booking.</p>
+              </DetailRow>
+            )}
             {user.email && (
               <DetailRow label="Email">
                 <p className="break-all text-base font-medium">{user.email}</p>
