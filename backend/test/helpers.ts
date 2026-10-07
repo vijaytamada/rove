@@ -51,6 +51,19 @@ export interface TestApp {
     opts?: { status?: 'ACTIVE' | 'INACTIVE'; capacity?: number },
   ) => Promise<{ id: string; name: string; cityId: string }>;
   makeModel: () => Promise<{ id: string }>;
+  /** A pricing plan for a model (default plan unless a city is given). Rs 50/hour, Rs 300/day, Rs 1000 deposit. */
+  makePlan: (modelId: string, opts?: { cityId?: string; hourly?: number; daily?: number | null; deposit?: number }) => Promise<{ id: string }>;
+  /** Marks a customer's identity check as passed so they can book. */
+  verifyKyc: (userId: string) => Promise<void>;
+  /** A signed-in customer with a verified identity. */
+  verifiedCustomer: () => Promise<TestUser & { auth: Auth }>;
+  /** A ready-to-book setup: open city and station, a model with a plan and `vehicles` scooters. */
+  makeBookable: (opts?: { vehicles?: number; hours?: { opensAt: string; closesAt: string } }) => Promise<{
+    cityId: string;
+    stationId: string;
+    modelId: string;
+    vehicleIds: string[];
+  }>;
   makeVehicle: (
     stationId: string,
     modelId: string,
@@ -107,7 +120,7 @@ export async function createTestApp(): Promise<TestApp> {
     return { id: user.id, role, email, phone: userPhone };
   };
 
-  return {
+  const self: TestApp = {
     app,
     prisma,
     redis,
@@ -146,6 +159,41 @@ export async function createTestApp(): Promise<TestApp> {
       });
       return { id: model.id };
     },
+    async makePlan(modelId, opts) {
+      const plan = await prisma.pricingPlan.create({
+        data: {
+          modelId,
+          cityId: opts?.cityId ?? null,
+          hourlyRateAmount: opts?.hourly ?? 5000,
+          dailyRateAmount: opts?.daily === undefined ? 30000 : opts.daily,
+          includedKmPerHour: 12,
+          extraKmRateAmount: 600,
+          lateFeePerHourAmount: 9900,
+          depositAmount: opts?.deposit ?? 100000,
+        },
+      });
+      return { id: plan.id };
+    },
+    async verifyKyc(userId) {
+      await prisma.kycRecord.create({
+        data: { userId, provider: 'mock', status: 'VERIFIED', consentAt: new Date(), verifiedAt: new Date() },
+      });
+    },
+    async verifiedCustomer() {
+      const customer = await self.asRole('CUSTOMER');
+      await self.verifyKyc(customer.id);
+      return customer;
+    },
+    async makeBookable(opts) {
+      const city = await self.makeCity();
+      const station = await self.makeStation(city.id);
+      if (opts?.hours) await prisma.station.update({ where: { id: station.id }, data: opts.hours });
+      const model = await self.makeModel();
+      await self.makePlan(model.id);
+      const vehicleIds: string[] = [];
+      for (let i = 0; i < (opts?.vehicles ?? 1); i++) vehicleIds.push((await self.makeVehicle(station.id, model.id)).id);
+      return { cityId: city.id, stationId: station.id, modelId: model.id, vehicleIds };
+    },
     async makeVehicle(stationId, modelId, opts) {
       const code = `E2E-${short().toUpperCase()}`;
       const vehicle = await prisma.vehicle.create({
@@ -164,7 +212,14 @@ export async function createTestApp(): Promise<TestApp> {
         ...users.flatMap((u) => [`otp:verify:${u.id}`, `otp:cooldown:verify:${u.id}`]),
       ];
       if (keys.length) await redis.client.del(...keys);
-      // Order matters: assignments (via users) and vehicles reference stations; stations reference cities.
+      // Order matters: refunds -> payments -> bookings -> users; plans and vehicles reference models and cities.
+      const ofTestUsers = { user: { id: { in: users.map((u) => u.id) } } };
+      await prisma.refund.deleteMany({ where: { payment: { booking: ofTestUsers } } });
+      await prisma.payment.deleteMany({ where: { booking: ofTestUsers } });
+      await prisma.booking.deleteMany({ where: ofTestUsers });
+      await prisma.pricingPlan.deleteMany({
+        where: { OR: [{ model: { brand: { startsWith: PREFIX } } }, { city: { name: { startsWith: PREFIX } } }] },
+      });
       await prisma.user.deleteMany({ where: { id: { in: users.map((u) => u.id) } } });
       await prisma.vehicle.deleteMany({ where: { code: { startsWith: 'E2E-' } } });
       await prisma.station.deleteMany({ where: { name: { startsWith: PREFIX } } });
@@ -173,4 +228,5 @@ export async function createTestApp(): Promise<TestApp> {
       await app.close();
     },
   };
+  return self;
 }

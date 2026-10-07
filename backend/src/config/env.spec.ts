@@ -32,5 +32,8 @@ describe('validateEnv', () => {
     expect(() =>
       validateEnv({ ...base, NODE_ENV: 'production', JWT_ACCESS_SECRET: 'a-real-long-random-secret' }),
     ).toThrow(/mock OTP/);
+    const real = { ...base, NODE_ENV: 'production', JWT_ACCESS_SECRET: 'a-real-long-random-secret' };
+    expect(() => validateEnv(real)).toThrow(/mock PAYMENT/);
+    expect(() => validateEnv(real)).toThrow(/mock KYC/);
   });
 });

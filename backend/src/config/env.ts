@@ -13,6 +13,8 @@ const envSchema = z
     REFRESH_TOKEN_TTL_DAYS: z.coerce.number().int().positive().default(30),
 
     OTP_PROVIDER: z.enum(['mock']).default('mock'),
+    KYC_PROVIDER: z.enum(['mock']).default('mock'),
+    PAYMENT_PROVIDER: z.enum(['mock']).default('mock'),
     /** Total OTP sends per day across all phones (guards against SMS pumping and runaway cost). */
     OTP_DAILY_SEND_CAP: z.coerce.number().int().positive().default(5000),
   })
@@ -25,12 +27,14 @@ const envSchema = z
         message: 'a dev-only secret must not be used in production',
       });
     }
-    if (env.OTP_PROVIDER === 'mock') {
-      ctx.addIssue({
-        code: 'custom',
-        path: ['OTP_PROVIDER'],
-        message: 'the mock OTP provider must not be used in production',
-      });
+    for (const key of ['OTP_PROVIDER', 'KYC_PROVIDER', 'PAYMENT_PROVIDER'] as const) {
+      if (env[key] === 'mock') {
+        ctx.addIssue({
+          code: 'custom',
+          path: [key],
+          message: `the mock ${key.replace('_PROVIDER', '')} provider must not be used in production`,
+        });
+      }
     }
   });
 

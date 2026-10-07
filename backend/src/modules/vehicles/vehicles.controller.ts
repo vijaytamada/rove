@@ -13,6 +13,7 @@ import {
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { CurrentUser, Public, Roles, type AuthUser } from '../../common/auth.decorators.js';
+import { AvailabilityQuery } from '../bookings/dto/booking.dto.js';
 import {
   ChangeVehicleStatusDto,
   CreateVehicleDto,
@@ -36,8 +37,8 @@ export class VehiclesController {
 
   @Public()
   @Get('stations/:stationId/vehicles')
-  listPublic(@Param('stationId', ParseUUIDPipe) stationId: string) {
-    return this.vehicles.listPublic(stationId);
+  listPublic(@Param('stationId', ParseUUIDPipe) stationId: string, @Query() query: AvailabilityQuery) {
+    return this.vehicles.listPublic(stationId, query);
   }
 
   // ---- Vehicle models (global catalogue; super admin writes) ----

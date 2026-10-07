@@ -4,6 +4,7 @@ import type { AuthUser } from '../../common/auth.decorators.js';
 import { pageArgs, type Page } from '../../common/page-query.dto.js';
 import { Prisma, type Station } from '../../generated/prisma/client.js';
 import { PrismaService } from '../../infra/prisma/prisma.service.js';
+import { liveBookingOverlap } from '../bookings/booking-availability.js';
 import { CitiesService } from '../cities/cities.service.js';
 import { ScopeService } from '../rbac/scope.service.js';
 import type { CreateStationDto, ListStationsQuery, UpdateStationDto } from './dto/station.dto.js';
@@ -19,7 +20,7 @@ export interface StationView {
   opensAt: string | null;
   closesAt: string | null;
   status: 'ACTIVE' | 'INACTIVE';
-  /** Scooters currently available to rent here. */
+  /** Scooters free to rent here right now (in service, and not booked or held for payment). */
   availableVehicles: number;
 }
 
@@ -135,9 +136,16 @@ export class StationsService {
 
   private async withCounts(stations: Station[]): Promise<StationView[]> {
     if (stations.length === 0) return [];
+    // "Available" means free to ride for the next hour: in service, and not booked or held by someone.
+    const now = new Date();
     const counts = await this.prisma.vehicle.groupBy({
       by: ['stationId'],
-      where: { stationId: { in: stations.map((s) => s.id) }, status: 'AVAILABLE', retiredAt: null },
+      where: {
+        stationId: { in: stations.map((s) => s.id) },
+        status: 'AVAILABLE',
+        retiredAt: null,
+        bookings: { none: liveBookingOverlap(now, new Date(now.getTime() + 3_600_000), now) },
+      },
       _count: { _all: true },
     });
     const byStation = new Map(counts.map((c) => [c.stationId, c._count._all]));

@@ -40,6 +40,44 @@ enum UserStatus {
   DISABLED
 }
 
+enum BookingStatus {
+  PENDING_PAYMENT // vehicle held for 10 minutes while the customer pays
+  CONFIRMED
+  IN_RIDE // Phase 5
+  RETURNED // Phase 5
+  SETTLED // Phase 6
+  CANCELLED
+  EXPIRED // payment hold ran out
+  NO_SHOW // Phase 5
+}
+
+enum PaymentPurpose {
+  RENTAL_AND_DEPOSIT
+  OUTSTANDING // Phase 6
+}
+
+enum PaymentStatus {
+  PENDING
+  SUCCEEDED
+  FAILED
+}
+
+enum RefundStatus {
+  SUCCEEDED
+  FAILED
+}
+
+enum RefundReason {
+  CANCELLATION
+  DEPOSIT_RETURN // Phase 6
+}
+
+enum KycStatus {
+  PENDING
+  VERIFIED
+  REJECTED
+}
+
 model User {
   id              String     @id @default(uuid()) @db.Uuid
   // Customers sign in with their phone (OTP): no password, email optional. Staff have both (CHECK in migration).
@@ -55,6 +93,8 @@ model User {
 
   refreshTokens RefreshToken[]
   assignments   StaffAssignment[]
+  bookings      Booking[]
+  kyc           KycRecord?
 
   @@index([role])
 }
@@ -102,8 +142,9 @@ model City {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  stations    Station[]
-  assignments StaffAssignment[]
+  stations     Station[]
+  assignments  StaffAssignment[]
+  pricingPlans PricingPlan[]
 
   @@unique([name, state])
 }
@@ -126,6 +167,7 @@ model Station {
   city        City              @relation(fields: [cityId], references: [id], onDelete: Restrict)
   vehicles    Vehicle[]
   assignments StaffAssignment[]
+  bookings    Booking[]
 
   @@unique([cityId, name])
   @@index([cityId])
@@ -143,7 +185,8 @@ model VehicleModel {
   createdAt         DateTime    @default(now())
   updatedAt         DateTime    @updatedAt
 
-  vehicles Vehicle[]
+  vehicles     Vehicle[]
+  pricingPlans PricingPlan[]
 
   @@unique([brand, name])
 }
@@ -164,9 +207,122 @@ model Vehicle {
   createdAt          DateTime      @default(now())
   updatedAt          DateTime      @updatedAt
 
-  model   VehicleModel @relation(fields: [modelId], references: [id], onDelete: Restrict)
-  station Station?     @relation(fields: [stationId], references: [id], onDelete: Restrict)
+  model    VehicleModel @relation(fields: [modelId], references: [id], onDelete: Restrict)
+  station  Station?     @relation(fields: [stationId], references: [id], onDelete: Restrict)
+  bookings Booking[]
 
   @@index([stationId, status])
   @@index([modelId])
+}
+
+// Money is integer paise. A plan belongs to a model; cityId null = the default for every city, a city plan overrides it.
+// At most one default plan per model (partial unique index in the migration).
+model PricingPlan {
+  id                   String   @id @default(uuid()) @db.Uuid
+  modelId              String   @db.Uuid
+  cityId               String?  @db.Uuid
+  hourlyRateAmount     Int
+  // When set, the rental for any duration is capped at this price (so 24 hours costs the day rate).
+  dailyRateAmount      Int?
+  includedKmPerHour    Int
+  extraKmRateAmount    Int
+  graceMinutes         Int      @default(15)
+  lateFeePerHourAmount Int
+  depositAmount        Int
+  isActive             Boolean  @default(true)
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  model VehicleModel @relation(fields: [modelId], references: [id], onDelete: Restrict)
+  city  City?        @relation(fields: [cityId], references: [id], onDelete: Restrict)
+
+  @@unique([modelId, cityId])
+  @@index([cityId])
+}
+
+// A customer's reservation of one specific vehicle for a time window. Overlaps on a vehicle are impossible (exclusion
+// constraint in the migration). The PIN is not stored: it is derived from the booking (see booking-codes.ts).
+model Booking {
+  id              String        @id @default(uuid()) @db.Uuid
+  code            String        @unique
+  userId          String        @db.Uuid
+  vehicleId       String        @db.Uuid
+  // Pickup station, copied from the vehicle at booking time.
+  stationId       String        @db.Uuid
+  status          BookingStatus @default(PENDING_PAYMENT)
+  startAt         DateTime
+  endAt           DateTime
+  hours           Int
+  holdExpiresAt   DateTime?
+  rentalAmount    Int
+  depositAmount   Int
+  totalAmount     Int
+  // The plan values the customer agreed to (rates, included km, late fee, grace, deposit). Later plan edits never change it.
+  pricingSnapshot Json
+  confirmedAt     DateTime?
+  cancelledAt     DateTime?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  user     User      @relation(fields: [userId], references: [id], onDelete: Restrict)
+  vehicle  Vehicle   @relation(fields: [vehicleId], references: [id], onDelete: Restrict)
+  station  Station   @relation(fields: [stationId], references: [id], onDelete: Restrict)
+  payments Payment[]
+
+  @@index([userId, createdAt])
+  @@index([userId, status])
+  @@index([vehicleId, startAt])
+  @@index([stationId, startAt])
+}
+
+model Payment {
+  id             String         @id @default(uuid()) @db.Uuid
+  bookingId      String         @db.Uuid
+  purpose        PaymentPurpose
+  chargeAmount   Int
+  status         PaymentStatus  @default(PENDING)
+  provider       String
+  providerRef    String?
+  // Replaying the same key returns the same payment instead of charging twice.
+  idempotencyKey String?        @unique
+  failureReason  String?
+  paidAt         DateTime?
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+
+  booking Booking  @relation(fields: [bookingId], references: [id], onDelete: Restrict)
+  refunds Refund[]
+
+  @@index([bookingId])
+}
+
+model Refund {
+  id           String       @id @default(uuid()) @db.Uuid
+  paymentId    String       @db.Uuid
+  refundAmount Int
+  status       RefundStatus
+  reason       RefundReason
+  provider     String
+  providerRef  String?
+  createdAt    DateTime     @default(now())
+
+  payment Payment @relation(fields: [paymentId], references: [id], onDelete: Restrict)
+
+  @@index([paymentId])
+}
+
+// One KYC record per customer. Holds the outcome only: never an identity number (see Security rules).
+model KycRecord {
+  id              String    @id @default(uuid()) @db.Uuid
+  userId          String    @unique @db.Uuid
+  provider        String
+  providerRef     String?
+  status          KycStatus
+  consentAt       DateTime
+  verifiedAt      DateTime?
+  rejectionReason String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
