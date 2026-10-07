@@ -1,5 +1,5 @@
-import Link from "next/link";
 import { StationCard } from "@/components/fleet/StationCard";
+import { CitySelect } from "@/components/fleet/CitySelect";
 import { getCities, getCityStations } from "@/lib/api";
 
 export const metadata = { title: "Stations" };
@@ -26,28 +26,19 @@ export default async function StationsPage({ searchParams }: { searchParams: Pro
     );
   }
 
+  // With one city it is chosen for you; with several, the first until you pick another.
   const selected = cities.find((c) => c.id === cityParam) ?? cities[0];
   const stations = (await getCityStations(selected.id)) ?? [];
 
   return (
     <>
-      <h1 className="text-3xl font-semibold tracking-tight">Stations</h1>
-      <p className="mt-2 text-ink-muted">Pick a city, then a station to see the scooters you can ride.</p>
-
-      <nav aria-label="Cities" className="mt-6 flex flex-wrap gap-2">
-        {cities.map((c) => (
-          <Link
-            key={c.id}
-            href={`/stations?city=${c.id}`}
-            aria-current={c.id === selected.id ? "page" : undefined}
-            className={`rounded-full px-4 py-2 text-sm font-medium transition-colors ${
-              c.id === selected.id ? "bg-ink text-white" : "border border-line bg-surface hover:bg-canvas"
-            }`}
-          >
-            {c.name}
-          </Link>
-        ))}
-      </nav>
+      <div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-4">
+        <div>
+          <h1 className="text-3xl font-semibold tracking-tight">Stations</h1>
+          <p className="mt-2 text-ink-muted">Pick a station to see the scooters you can ride.</p>
+        </div>
+        <CitySelect cities={cities} selectedId={selected.id} />
+      </div>
 
       {stations.length === 0 ? (
         <p className="mt-10 text-ink-muted">There are no open stations in {selected.name} yet.</p>

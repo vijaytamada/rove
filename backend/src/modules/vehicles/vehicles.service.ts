@@ -4,6 +4,11 @@ import type { AuthUser } from '../../common/auth.decorators.js';
 import { pageArgs, type Page } from '../../common/page-query.dto.js';
 import { Prisma, type Station, type Vehicle, type VehicleModel, type VehicleStatus } from '../../generated/prisma/client.js';
 import { PrismaService } from '../../infra/prisma/prisma.service.js';
+import { liveBookingOverlap, liveBookingWhere } from '../bookings/booking-availability.js';
+import { resolveWindow } from '../bookings/booking-rules.js';
+import { toStationSummary, type StationSummary } from '../bookings/booking-views.js';
+import type { AvailabilityQuery } from '../bookings/dto/booking.dto.js';
+import { PricingPlansService, type PricingView } from '../pricing/pricing-plans.service.js';
 import { ScopeService } from '../rbac/scope.service.js';
 import type {
   ChangeVehicleStatusDto,
@@ -23,6 +28,12 @@ export interface VehiclePublicView {
   status: VehicleStatus;
   batteryPercent: number | null;
   model: VehicleModelView;
+}
+
+/** What customers see when choosing a scooter: the public view plus the price they would pay here. */
+export interface VehicleBrowseView extends VehiclePublicView {
+  /** Null when no pricing plan covers this model in this city; such a scooter cannot be booked yet. */
+  pricing: PricingView | null;
 }
 
 /** What staff see. */
@@ -59,20 +70,46 @@ export class VehiclesService {
   constructor(
     @Inject(PrismaService) private readonly prisma: PrismaService,
     @Inject(ScopeService) private readonly scopes: ScopeService,
+    @Inject(PricingPlansService) private readonly plans: PricingPlansService,
   ) {}
 
-  /** Public: scooters available to rent at an active station. */
-  async listPublic(stationId: string): Promise<VehiclePublicView[]> {
+  /**
+   * Public: scooters free to rent at an active station for a window (default: the next hour), with their price.
+   * Scooters with a booking or payment hold in that window are left out.
+   */
+  async listPublic(stationId: string, query: AvailabilityQuery = {}, now = new Date()): Promise<VehicleBrowseView[]> {
     const station = await this.prisma.station.findFirst({
       where: { id: stationId, status: 'ACTIVE', city: { isActive: true } },
     });
     if (!station) throw new AppException(404, 'STATION_NOT_FOUND', 'Station not found.');
+    const window = resolveWindow(query.startAt ? new Date(query.startAt) : undefined, query.hours ?? 1, now);
     const vehicles = await this.prisma.vehicle.findMany({
-      where: { stationId, status: 'AVAILABLE', retiredAt: null, model: { isActive: true } },
+      where: {
+        stationId,
+        status: 'AVAILABLE',
+        retiredAt: null,
+        model: { isActive: true },
+        bookings: { none: liveBookingOverlap(window.startAt, window.endAt, now) },
+      },
       include: INCLUDE,
       orderBy: { code: 'asc' },
     });
-    return vehicles.map(toPublic);
+    const pricing = await this.plans.resolveForModels(station.cityId, [...new Set(vehicles.map((v) => v.modelId))]);
+    return vehicles.map((v) => ({ ...toPublic(v), pricing: pricing.get(v.modelId) ?? null }));
+  }
+
+  /** Public: one scooter with its station and price, for the booking page. Shown even when it is booked right now. */
+  async getPublic(id: string): Promise<{ vehicle: VehicleBrowseView; station: StationSummary }> {
+    const vehicle = await this.prisma.vehicle.findFirst({
+      where: { id, retiredAt: null, model: { isActive: true }, station: { is: { status: 'ACTIVE', city: { isActive: true } } } },
+      include: { model: true, station: { include: { city: true } } },
+    });
+    if (!vehicle?.station) throw new AppException(404, 'VEHICLE_NOT_FOUND', 'Scooter not found.');
+    const pricing = await this.plans.resolveForModels(vehicle.station.cityId, [vehicle.modelId]);
+    return {
+      vehicle: { ...toPublic(vehicle), pricing: pricing.get(vehicle.modelId) ?? null },
+      station: toStationSummary(vehicle.station),
+    };
   }
 
   async listManage(user: AuthUser, query: ListVehiclesQuery): Promise<Page<VehicleManageView>> {
@@ -136,7 +173,10 @@ export class VehiclesService {
     if (vehicle.stationId) await this.scopes.assertStationIdAccess(user, vehicle.stationId);
 
     const moving = dto.stationId !== undefined && dto.stationId !== vehicle.stationId;
-    if (moving) await this.scopes.assertStationIdAccess(user, dto.stationId!);
+    if (moving) {
+      await this.scopes.assertStationIdAccess(user, dto.stationId!);
+      await this.assertNoLiveBookings(id);
+    }
 
     try {
       const updated = await this.prisma.$transaction(async (tx) => {
@@ -168,6 +208,8 @@ export class VehiclesService {
 
     if (vehicle.status === dto.status) return toManage(vehicle);
     assertManualStatusChange(user.role, vehicle.status, dto.status);
+    // Taking a scooter out of service while a customer holds a booking on it would strand them.
+    if (dto.status !== 'AVAILABLE') await this.assertNoLiveBookings(id);
 
     // Guard against a booking taking the vehicle between the read and the write.
     const result = await this.prisma.vehicle.updateMany({
@@ -183,6 +225,7 @@ export class VehiclesService {
     const vehicle = await this.load(id);
     this.assertNotBusy(vehicle.status);
     if (vehicle.stationId) await this.scopes.assertStationIdAccess(user, vehicle.stationId);
+    await this.assertNoLiveBookings(id);
     await this.prisma.vehicle.update({
       where: { id },
       data: { retiredAt: new Date(), status: 'OFFLINE', stationId: null },
@@ -198,6 +241,15 @@ export class VehiclesService {
   private assertNotBusy(status: VehicleStatus) {
     if (BUSY_STATUSES.includes(status)) {
       throw new AppException(409, 'VEHICLE_BUSY', 'This vehicle is part of a booking or ride and cannot be changed.');
+    }
+  }
+
+  /** A scooter with a paid or pending booking cannot be moved, retired or taken out of service. */
+  private async assertNoLiveBookings(id: string) {
+    const now = new Date();
+    const count = await this.prisma.booking.count({ where: { vehicleId: id, endAt: { gt: now }, ...liveBookingWhere(now) } });
+    if (count > 0) {
+      throw new AppException(409, 'VEHICLE_BOOKED', 'This scooter has a customer booking. Wait for it to finish or cancel it first.');
     }
   }
 

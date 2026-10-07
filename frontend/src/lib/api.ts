@@ -1,5 +1,5 @@
 import { API_URL } from "./config";
-import type { CityView, StationView, VehiclePublicView } from "./types";
+import type { CityView, PublicVehicleDetail, StationView, VehicleBrowseView } from "./types";
 
 export type CheckStatus = "up" | "down";
 
@@ -28,13 +28,19 @@ export type ApiResult<T> =
 /** Server-side call to the backend API. Never throws; network failures become `NETWORK_ERROR`. */
 export async function apiRequest<T = void>(
   path: string,
-  opts: { method?: "GET" | "POST" | "PATCH" | "PUT" | "DELETE"; body?: unknown; token?: string } = {},
+  opts: {
+    method?: "GET" | "POST" | "PATCH" | "PUT" | "DELETE";
+    body?: unknown;
+    token?: string;
+    headers?: Record<string, string>;
+  } = {},
 ): Promise<ApiResult<T>> {
   try {
     const res = await fetch(`${API_URL}${path}`, {
       method: opts.method ?? (opts.body === undefined ? "GET" : "POST"),
       cache: "no-store",
       headers: {
+        ...opts.headers,
         ...(opts.body !== undefined && { "Content-Type": "application/json" }),
         ...(opts.token && { Authorization: `Bearer ${opts.token}` }),
       },
@@ -77,4 +83,5 @@ async function publicGet<T>(path: string): Promise<T | null> {
 export const getCities = () => publicGet<CityView[]>("/cities");
 export const getCityStations = (cityId: string) => publicGet<StationView[]>(`/cities/${cityId}/stations`);
 export const getStation = (id: string) => publicGet<StationView>(`/stations/${id}`);
-export const getStationVehicles = (id: string) => publicGet<VehiclePublicView[]>(`/stations/${id}/vehicles`);
+export const getStationVehicles = (id: string) => publicGet<VehicleBrowseView[]>(`/stations/${id}/vehicles`);
+export const getVehicle = (id: string) => publicGet<PublicVehicleDetail>(`/vehicles/${id}`);

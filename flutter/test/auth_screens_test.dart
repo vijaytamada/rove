@@ -215,6 +215,7 @@ void main() {
         if (path.endsWith('/auth/phone/request')) return codeSent();
         if (path.endsWith('/auth/phone/verify')) return authOk(user: me());
         if (path.endsWith('/auth/logout')) return json(204, {});
+        if (path.endsWith('/kyc/status')) return json(200, {'status': 'VERIFIED', 'verifiedAt': null, 'rejectionReason': null});
         return json(200, me());
       });
       await pumpApp(tester, env);
@@ -228,7 +229,8 @@ void main() {
       await openProfile(tester, () => userJson(phone: testPhone, phoneVerified: true));
       expect(find.text('Asha Kumar'), findsWidgets);
       expect(find.text('+91 98765 43210'), findsWidgets);
-      expect(find.text('Verified'), findsOneWidget);
+      expect(find.text('Verified'), findsNWidgets(2)); // mobile number + identity check
+      expect(find.text('Identity check'), findsOneWidget);
       expect(find.byType(TextFormField), findsNothing);
       expect(find.byTooltip('Edit full name'), findsOneWidget);
       expect(find.byTooltip('Change mobile number'), findsOneWidget);
@@ -373,7 +375,7 @@ void main() {
       await tester.enterText(field('Code'), '123456');
       await tester.pumpAndSettle();
       expect(env.to('/auth/otp/verify').single.body, contains('"code":"123456"'));
-      expect(find.text('Verified'), findsOneWidget);
+      expect(find.text('Verified'), findsNWidgets(2)); // mobile number + identity check
       expect(find.text('Not verified'), findsNothing);
     });
 

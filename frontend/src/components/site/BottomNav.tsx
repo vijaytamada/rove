@@ -2,17 +2,20 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Home, MapPin, User } from "lucide-react";
+import { Home, MapPin, Ticket, User } from "lucide-react";
 
-// Phones only (hidden from md up, where the header navigation is used). Bookings joins in Phase 4.
+// Phones only (hidden from md up, where the header navigation is used).
 const tabs = [
   { label: "Home", icon: Home, href: "/", exact: true },
   { label: "Stations", icon: MapPin, href: "/stations", exact: false },
+  { label: "Bookings", icon: Ticket, href: "/bookings", exact: false },
   { label: "Profile", icon: User, href: "/profile", exact: false },
 ] as const;
 
 export function BottomNav() {
   const pathname = usePathname();
+  // Checkout pages have their own bottom bar (price + button); the tabs would cover it.
+  if (pathname.startsWith("/book/") || /^\/bookings\/[^/]+\/pay$/.test(pathname)) return null;
   return (
     <nav
       aria-label="Primary"

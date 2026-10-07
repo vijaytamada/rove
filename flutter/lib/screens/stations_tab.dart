@@ -5,6 +5,7 @@ import '../api/fleet_api.dart';
 import '../auth/auth_controller.dart';
 import '../models/fleet.dart';
 import '../theme/tokens.dart';
+import '../widgets/city_select.dart';
 import '../widgets/fleet_cards.dart';
 import '../widgets/load_states.dart';
 import 'station_detail_screen.dart';
@@ -82,27 +83,11 @@ class _StationsTabState extends State<StationsTab> {
       appBar: AppBar(title: const Text('Stations'), centerTitle: false),
       body: Column(
         children: [
-          if (cities.length > 1)
-            SizedBox(
-              height: 48,
-              child: ListView.separated(
-                scrollDirection: Axis.horizontal,
-                padding: const EdgeInsets.symmetric(horizontal: Tokens.gutter),
-                itemCount: cities.length,
-                separatorBuilder: (_, _) => const SizedBox(width: 8),
-                itemBuilder: (context, i) {
-                  final c = cities[i];
-                  return ChoiceChip(
-                    label: Text(c.name),
-                    selected: c.id == _city?.id,
-                    showCheckmark: false,
-                    selectedColor: Tokens.ink,
-                    labelStyle: TextStyle(color: c.id == _city?.id ? Colors.white : Tokens.ink),
-                    shape: const StadiumBorder(side: BorderSide(color: Tokens.line)),
-                    onSelected: (_) => _selectCity(c),
-                  );
-                },
-              ),
+          // One city is chosen for you (a plain label); several are picked from a sheet, never side by side.
+          if (_city != null && cities.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(Tokens.gutter, 4, Tokens.gutter, 8),
+              child: CitySelect(cities: cities, selected: _city!, onSelected: _selectCity),
             ),
           Expanded(child: _body()),
         ],

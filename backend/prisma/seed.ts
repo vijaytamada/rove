@@ -84,6 +84,13 @@ const MODELS = [
   { brand: 'Voltra', name: 'V3 Pro', rangeKm: 120, topSpeedKmh: 60, batteryCapacityWh: 3600 },
 ] as const;
 
+// Default pricing, in the same order as MODELS. Amounts are paise (4900 = Rs 49). The day rate caps the price of long rentals.
+const PLANS = [
+  { hourlyRateAmount: 4900, dailyRateAmount: 29900, includedKmPerHour: 10, extraKmRateAmount: 600, graceMinutes: 15, lateFeePerHourAmount: 9900, depositAmount: 100000 },
+  { hourlyRateAmount: 6900, dailyRateAmount: 39900, includedKmPerHour: 12, extraKmRateAmount: 700, graceMinutes: 15, lateFeePerHourAmount: 12900, depositAmount: 150000 },
+  { hourlyRateAmount: 9900, dailyRateAmount: 59900, includedKmPerHour: 15, extraKmRateAmount: 900, graceMinutes: 15, lateFeePerHourAmount: 17900, depositAmount: 200000 },
+] as const;
+
 // How many scooters (and of which model) each station gets.
 const FLEET: Record<string, { model: number; battery: number; status?: 'MAINTENANCE' }[]> = {
   indiranagar: [{ model: 1, battery: 92 }, { model: 2, battery: 85 }, { model: 0, battery: 78 }],
@@ -117,6 +124,14 @@ try {
       create: { ...m },
     });
     modelIds.push(model.id);
+  }
+
+  // One default plan per model (amounts in paise): the same price in every city until a city gets its own plan.
+  for (const [i, plan] of PLANS.entries()) {
+    const modelId = modelIds[i];
+    if (await prisma.pricingPlan.findFirst({ where: { modelId, cityId: null } })) continue;
+    await prisma.pricingPlan.create({ data: { modelId, ...plan } });
+    console.log(`+ created pricing plan for ${MODELS[i].name}`);
   }
 
   for (const c of CITIES) {

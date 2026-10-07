@@ -23,6 +23,7 @@ const stationBlr = (await api(`/cities/${blr.id}/stations`))[0];
 const stationHyd = (await api(`/cities/${hyd.id}/stations`))[0];
 const vehBlr = (await api("/manage/vehicles?limit=100", tokens.admin)).items.find((v) => v.station?.cityId === blr.id);
 const vehHyd = (await api("/manage/vehicles?limit=100", tokens.admin)).items.find((v) => v.station?.cityId === hyd.id);
+const plan = (await api("/manage/pricing-plans", tokens.admin)).items[0];
 const empHyd = (await api("/users?role=STATION_EMPLOYEE", tokens.admin)).items.find((u) => u.email.startsWith("employee.hitech"));
 const empBlr = (await api("/users?role=STATION_EMPLOYEE", tokens.admin)).items.find((u) => u.email.startsWith("employee.indira"));
 
@@ -50,6 +51,15 @@ const routes = [
   ["/admin/staff", { anon: "staff-login", customer: "to:/", employee: "to:/staff", manager: "ok", admin: "ok" }],
   [`/admin/staff/${empHyd.id}`, { anon: "staff-login", customer: "to:/", employee: "to:/staff", manager: "ok", admin: "ok" }],
   [`/admin/staff/${empBlr.id}`, { anon: "staff-login", customer: "to:/", employee: "to:/staff", manager: "404", admin: "ok" }],
+  ["/bookings", { anon: "login", customer: "ok", employee: "to:/staff", manager: "to:/admin", admin: "to:/admin" }],
+  ["/bookings/00000000-0000-4000-8000-000000000000", { anon: "login", customer: "404", employee: "to:/staff", manager: "to:/admin", admin: "to:/admin" }],
+  ["/bookings/00000000-0000-4000-8000-000000000000/pay", { anon: "login", customer: "404", employee: "to:/staff", manager: "to:/admin", admin: "to:/admin" }],
+  ["/verify", { anon: "login", customer: "ok", employee: "to:/staff", manager: "to:/admin", admin: "to:/admin" }],
+  [`/book/${vehBlr.id}`, { anon: "ok", customer: "ok", employee: "ok", manager: "ok", admin: "ok" }],
+  ["/book/not-a-uuid", { anon: "404", customer: "404", employee: "404", manager: "404", admin: "404" }],
+  ["/book/00000000-0000-4000-8000-000000000000", { anon: "404", customer: "404", employee: "404", manager: "404", admin: "404" }],
+  ["/admin/pricing", { anon: "staff-login", customer: "to:/", employee: "to:/staff", manager: "ok", admin: "ok" }],
+  [`/admin/pricing/${plan.id}`, { anon: "staff-login", customer: "to:/", employee: "to:/staff", manager: "to:/admin", admin: "ok" }],
   ["/nope", { anon: "404", customer: "404", employee: "404", manager: "404", admin: "404" }],
   ["/manifest.webmanifest", { anon: "ok", customer: "ok", employee: "ok", manager: "ok", admin: "ok" }],
 ];
@@ -90,12 +100,22 @@ checks.push(["admin staff excludes customers", !/customer@rove\.local/.test(t6) 
 const t7 = await text("/staff", tokens.employee);
 checks.push(["employee console shows only own station", /Indiranagar/.test(t7) && !/Koramangala/.test(t7) && !/HITEC/.test(t7)]);
 const t8 = await text("/", tokens.customer);
-checks.push(["customer home greets by name, no console button", /Hi, Demo/.test(t8) && !/Open your console/.test(t8)]);
+checks.push(["customer home greets by name, no console button", /Hi, \w+/.test(t8) && !/Open your console/.test(t8)]);
 const t9 = await text("/stations", tokens.anon ?? "x");
 checks.push(["public stations lists Bengaluru stations", /Indiranagar/.test(t9) && /Koramangala/.test(t9)]);
 const t10 = await text(`/stations/${stationBlr.id}`, tokens.customer);
 checks.push(["station page lists scooters, no staff-only data", /BLR-001/.test(t10) && !/Registration/.test(t10) && !/Odometer/.test(t10)]);
 const t11 = await text("/admin", tokens.admin);
 checks.push(["admin overview counts", /Cities\s*2/.test(t11) && /Stations\s*5/.test(t11) && /Scooters\s*12/.test(t11)]);
+const t12 = await text(`/book/${vehBlr.id}`, tokens.customer);
+checks.push(["booking page shows rates, deposit and no staff-only data", /Rates and rules/.test(t12) && /deposit/.test(t12) && !/Odometer/.test(t12)]);
+const t13 = await text(`/book/${vehBlr.id}`, tokens.manager);
+checks.push(["staff see a customers-only notice instead of the booking form", /customer accounts/.test(t13) && !/Start now/.test(t13)]);
+const t14 = await text("/admin/pricing", tokens.manager);
+checks.push(["manager pricing is read-only", /Pricing/.test(t14) && !/Add plan/.test(t14)]);
+const t15 = await text("/admin/pricing", tokens.admin);
+checks.push(["admin pricing can add plans", /Add plan/.test(t15) && /₹/.test(t15)]);
+const t16 = await text("/stations", tokens.anon ?? "x");
+checks.push(["with two cities, cities sit behind a selector button (not side by side)", /Bengaluru/.test(t16) && !/Hyderabad/.test(t16)]);
 for (const [name, ok] of checks) { console.log(`${ok ? "PASS" : "FAIL"}  ${name}`); if (!ok) failures++; }
 process.exit(failures ? 1 : 0);

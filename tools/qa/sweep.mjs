@@ -24,7 +24,9 @@ const employee = await login("employee.indiranagar@rove.local", ACCOUNTS.manager
 // 1. Every route in the OpenAPI spec: unauthenticated and wrong-role behaviour.
 const spec = (await j("GET", "/api/docs-json")).data;
 const uuid = "00000000-0000-4000-8000-000000000000";
-const publicPaths = new Set(["/api/v1/health", "/api/v1/auth/phone/request", "/api/v1/auth/phone/verify", "/api/v1/auth/phone/signup", "/api/v1/auth/login", "/api/v1/auth/refresh", "/api/v1/auth/logout", "/api/v1/cities", "/api/v1/cities/{cityId}/stations", "/api/v1/stations/{id}", "/api/v1/stations/{stationId}/vehicles"]);
+const publicPaths = new Set(["/api/v1/health", "/api/v1/auth/phone/request", "/api/v1/auth/phone/verify", "/api/v1/auth/phone/signup", "/api/v1/auth/login", "/api/v1/auth/refresh", "/api/v1/auth/logout", "/api/v1/cities", "/api/v1/cities/{cityId}/stations", "/api/v1/stations/{id}", "/api/v1/stations/{stationId}/vehicles", "/api/v1/vehicles/{id}", "/api/v1/bookings/quote"]);
+// Customer-only routes: a customer is allowed in (checked below that staff are not).
+const customerOnly = new Set(["/api/v1/kyc/status", "/api/v1/kyc/start", "/api/v1/bookings", "/api/v1/bookings/{id}", "/api/v1/bookings/{id}/pay", "/api/v1/bookings/{id}/cancel"]);
 let routeCount = 0;
 for (const [path, methods] of Object.entries(spec.paths)) {
   for (const method of Object.keys(methods)) {
@@ -36,7 +38,12 @@ for (const [path, methods] of Object.entries(spec.paths)) {
     if (!publicPaths.has(path)) {
       check(`anon ${m} ${path} -> 401`, anon.status === 401, `got ${anon.status}`);
       const cust = await j(m, url, { token: customer, body });
-      const allowedForCustomer = ["/api/v1/me", "/api/v1/auth/otp/send", "/api/v1/auth/otp/verify", "/api/v1/auth/phone/change", "/api/v1/auth/phone/change/verify"].includes(path);
+      const allowedForCustomer = ["/api/v1/me", "/api/v1/auth/otp/send", "/api/v1/auth/otp/verify", "/api/v1/auth/phone/change", "/api/v1/auth/phone/change/verify"].includes(path) || customerOnly.has(path);
+      if (customerOnly.has(path)) {
+        for (const [who, token] of [["admin", admin], ["manager", manager], ["employee", employee]]) {
+          check(`${who} ${m} ${path} -> 403 (customers only)`, (await j(m, url, { token, body })).status === 403);
+        }
+      }
       if (!allowedForCustomer) check(`customer ${m} ${path} -> 403`, cust.status === 403, `got ${cust.status}`);
     }
   }

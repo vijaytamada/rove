@@ -4,6 +4,8 @@ import type { AuthUser } from '../../common/auth.decorators.js';
 import { pageArgs, type Page } from '../../common/page-query.dto.js';
 import { Prisma, type Station } from '../../generated/prisma/client.js';
 import { PrismaService } from '../../infra/prisma/prisma.service.js';
+import { liveBookingOverlap } from '../bookings/booking-availability.js';
+import { isOpenAt } from '../bookings/booking-rules.js';
 import { CitiesService } from '../cities/cities.service.js';
 import { ScopeService } from '../rbac/scope.service.js';
 import type { CreateStationDto, ListStationsQuery, UpdateStationDto } from './dto/station.dto.js';
@@ -19,11 +21,13 @@ export interface StationView {
   opensAt: string | null;
   closesAt: string | null;
   status: 'ACTIVE' | 'INACTIVE';
-  /** Scooters currently available to rent here. */
+  /** Scooters free to rent here right now (in service, and not booked or held for payment). */
   availableVehicles: number;
+  /** Whether the station is inside its opening hours right now (city time). Booking a later time is still possible. */
+  openNow: boolean;
 }
 
-const toView = (s: Station, availableVehicles: number): StationView => ({
+const toView = (s: Station, availableVehicles: number, openNow = true): StationView => ({
   id: s.id,
   cityId: s.cityId,
   name: s.name,
@@ -35,6 +39,7 @@ const toView = (s: Station, availableVehicles: number): StationView => ({
   closesAt: s.closesAt,
   status: s.status,
   availableVehicles,
+  openNow,
 });
 
 @Injectable()
@@ -135,13 +140,27 @@ export class StationsService {
 
   private async withCounts(stations: Station[]): Promise<StationView[]> {
     if (stations.length === 0) return [];
+    // "Available" means free to ride for the next hour: in service, and not booked or held by someone.
+    const now = new Date();
     const counts = await this.prisma.vehicle.groupBy({
       by: ['stationId'],
-      where: { stationId: { in: stations.map((s) => s.id) }, status: 'AVAILABLE', retiredAt: null },
+      where: {
+        stationId: { in: stations.map((s) => s.id) },
+        status: 'AVAILABLE',
+        retiredAt: null,
+        bookings: { none: liveBookingOverlap(now, new Date(now.getTime() + 3_600_000), now) },
+      },
       _count: { _all: true },
     });
     const byStation = new Map(counts.map((c) => [c.stationId, c._count._all]));
-    return stations.map((s) => toView(s, byStation.get(s.id) ?? 0));
+    const cities = await this.prisma.city.findMany({
+      where: { id: { in: [...new Set(stations.map((s) => s.cityId))] } },
+      select: { id: true, timezone: true },
+    });
+    const zone = new Map(cities.map((c) => [c.id, c.timezone]));
+    return stations.map((s) =>
+      toView(s, byStation.get(s.id) ?? 0, isOpenAt(now, s.opensAt, s.closesAt, zone.get(s.cityId) ?? 'Asia/Kolkata')),
+    );
   }
 
   /** Opening hours are both set or both empty. */

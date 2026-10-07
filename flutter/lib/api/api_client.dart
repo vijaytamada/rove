@@ -61,18 +61,25 @@ class ApiClient {
 
   Future<ApiResult> get(String path, {bool auth = true}) => _send('GET', path, auth: auth);
 
-  Future<ApiResult> post(String path, {Object? body, bool auth = true}) =>
-      _send('POST', path, body: body ?? const {}, auth: auth);
+  Future<ApiResult> post(String path, {Object? body, bool auth = true, Map<String, String>? headers}) =>
+      _send('POST', path, body: body ?? const {}, auth: auth, headers: headers);
 
   Future<ApiResult> patch(String path, {Object? body}) => _send('PATCH', path, body: body ?? const {});
 
-  Future<ApiResult> _send(String method, String path, {Object? body, bool auth = true, bool retried = false}) async {
+  Future<ApiResult> _send(
+    String method,
+    String path, {
+    Object? body,
+    bool auth = true,
+    bool retried = false,
+    Map<String, String>? headers,
+  }) async {
     final token = auth ? await tokens.readAccess() : null;
     final http.Response response;
     try {
       final request = http.Request(method, Uri.parse('$baseUrl$path'))
         ..headers['Accept'] = 'application/json'
-        ..headers.addAll({if (token != null) 'Authorization': 'Bearer $token'});
+        ..headers.addAll({if (token != null) 'Authorization': 'Bearer $token', ...?headers});
       if (body != null) {
         request.headers['Content-Type'] = 'application/json';
         request.body = jsonEncode(body);
@@ -87,7 +94,7 @@ class ApiClient {
     }
 
     if (response.statusCode == 401 && auth && !retried && await _refreshTokens()) {
-      return _send(method, path, body: body, auth: auth, retried: true);
+      return _send(method, path, body: body, auth: auth, retried: true, headers: headers);
     }
     return _parse(response);
   }

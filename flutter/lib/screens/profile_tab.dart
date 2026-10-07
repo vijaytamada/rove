@@ -3,8 +3,10 @@ import 'dart:async';
 import 'package:flutter/foundation.dart' show kReleaseMode;
 import 'package:flutter/material.dart';
 
+import '../api/booking_api.dart';
 import '../auth/auth_controller.dart';
 import '../auth/phone.dart';
+import '../models/booking.dart';
 import '../models/user.dart';
 import '../theme/tokens.dart';
 import '../widgets/app_text_field.dart';
@@ -12,9 +14,13 @@ import '../widgets/form_banner.dart';
 import '../widgets/otp_field.dart';
 import '../widgets/primary_button.dart';
 import '../widgets/status_chip.dart';
+import 'verify_screen.dart';
 
 class ProfileTab extends StatelessWidget {
-  const ProfileTab({super.key});
+  const ProfileTab({super.key, this.active = true});
+
+  /// True while this tab is on screen (the identity check status refreshes when it becomes visible).
+  final bool active;
 
   @override
   Widget build(BuildContext context) {
@@ -72,6 +78,10 @@ class ProfileTab extends StatelessWidget {
                   const _NameRow(),
                   const Divider(height: 32, color: Tokens.line),
                   const _PhoneRow(),
+                  if (user.role == Role.customer) ...[
+                    const Divider(height: 32, color: Tokens.line),
+                    _KycRow(active: active),
+                  ],
                   if (user.email != null) ...[
                     const Divider(height: 32, color: Tokens.line),
                     _DetailRow(
@@ -139,6 +149,71 @@ class _DetailRow extends StatelessWidget {
             ),
           ),
       ],
+    );
+  }
+}
+
+/// Identity check status. Read-only: it is done once, from the booking flow, or from here.
+class _KycRow extends StatefulWidget {
+  const _KycRow({required this.active});
+
+  final bool active;
+
+  @override
+  State<_KycRow> createState() => _KycRowState();
+}
+
+class _KycRowState extends State<_KycRow> {
+  KycView? _kyc;
+  bool _started = false;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (!_started) {
+      _started = true;
+      _load();
+    }
+  }
+
+  @override
+  void didUpdateWidget(_KycRow old) {
+    super.didUpdateWidget(old);
+    if (widget.active && !old.active) _load();
+  }
+
+  Future<void> _load() async {
+    final (kyc, _) = await BookingApi(AuthScope.of(context).api).kycStatus();
+    if (mounted && kyc != null) setState(() => _kyc = kyc);
+  }
+
+  Future<void> _verify() async {
+    final done = await Navigator.of(context).push<bool>(MaterialPageRoute(builder: (_) => const VerifyScreen()));
+    if (done == true && mounted) _load();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final kyc = _kyc;
+    return _DetailRow(
+      label: 'Identity check',
+      note: 'Needed once, before your first booking.',
+      child: kyc == null
+          ? const Text('–', style: TextStyle(fontSize: 16, color: Tokens.inkMuted))
+          : kyc.verified
+              ? const Align(alignment: Alignment.centerLeft, child: StatusChip('Verified', tone: ChipTone.success))
+              : Wrap(
+                  spacing: 8,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  children: [
+                    const StatusChip('Not verified', tone: ChipTone.warning),
+                    TextButton(
+                      onPressed: _verify,
+                      style: TextButton.styleFrom(padding: EdgeInsets.zero, minimumSize: const Size(0, 32)),
+                      child: const Text('Verify now'),
+                    ),
+                  ],
+                ),
     );
   }
 }

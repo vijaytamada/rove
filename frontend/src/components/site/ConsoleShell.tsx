@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Building2, LayoutDashboard, MapPin, Package, Truck, User, Users, Bike } from "lucide-react";
+import { Building2, LayoutDashboard, MapPin, Package, Tag, Truck, User, Users, Bike } from "lucide-react";
 import type { ReactNode } from "react";
 import { logout } from "@/app/actions/auth";
 import { Wordmark } from "@/components/app/Wordmark";
@@ -27,6 +27,7 @@ export async function ConsoleShell({ children }: { children: ReactNode }) {
           { href: "/admin/stations", label: "Stations", icon: MapPin },
           { href: "/admin/fleet", label: "Fleet", icon: Bike },
           { href: "/admin/models", label: "Vehicle models", icon: Package },
+          { href: "/admin/pricing", label: "Pricing", icon: Tag },
           { href: "/admin/staff", label: "Staff", icon: Users },
         ]
       : []),

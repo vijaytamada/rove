@@ -48,6 +48,13 @@ PostgreSQL via Prisma. This lists expected entities and purpose only. Detailed c
 - `Vehicle`: `code` unique, optional unique `registrationNumber`, `status`, `batteryPercent`, `odometerKm`, nullable `stationId` (null while out on a ride, set by Phase 5), `retiredAt` (soft delete). CHECKs: battery 0-100, odometer >= 0. Type-specific attributes live on `VehicleModel` so bikes and cars can be added later.
 - `StaffAssignment.cityId/stationId` now have foreign keys (ON DELETE RESTRICT).
 
+## Phase 4 notes (implemented: PricingPlan, Booking, Payment, Refund, KycRecord)
+- `PricingPlan`: per model, optional city (null = default for every city). Unique (model, city) plus a partial unique index for one default per model. Fields: `hourlyRateAmount`, optional `dailyRateAmount` (cap on any rental), `includedKmPerHour`, `extraKmRateAmount`, `graceMinutes`, `lateFeePerHourAmount`, `depositAmount`, `isActive`. CHECKs on amounts. The excess-km, late and grace values are stored now and used by Phase 6.
+- `Booking`: user, vehicle, pickup station, `startAt`/`endAt`/`hours`, `status` (`PENDING_PAYMENT, CONFIRMED, IN_RIDE, RETURNED, SETTLED, CANCELLED, EXPIRED, NO_SHOW`; Phase 4 uses the first, second, sixth and seventh), `holdExpiresAt`, `rentalAmount`/`depositAmount`/`totalAmount` (CHECK total = rental + deposit), `pricingSnapshot` (JSON: the rates the customer agreed to), `confirmedAt`, `cancelledAt`, unique `code` (RV-XXXXXX). **No overlaps:** a Postgres exclusion constraint (`btree_gist`) forbids two live bookings (`PENDING_PAYMENT, CONFIRMED, IN_RIDE`) on one vehicle with overlapping time ranges; back-to-back is allowed. The service also locks the vehicle row, and marks expired holds `EXPIRED` before inserting so they never block. The PIN is **not stored**: it is an HMAC of the booking id (see `booking-codes.ts`).
+- `Vehicle.status` stays `AVAILABLE` while a booking exists: availability comes from bookings, so a scooter can be booked for several non-overlapping windows. `RESERVED`/`IN_RIDE` are set at pickup in Phase 5.
+- `Payment` (`RENTAL_AND_DEPOSIT` now, `OUTSTANDING` in Phase 6): `chargeAmount`, `status`, `provider`, `providerRef`, unique `idempotencyKey`, `failureReason`, `paidAt`. `Refund`: `refundAmount`, `status`, `reason`, `provider`, `providerRef`.
+- `KycRecord`: one per user; provider, `providerRef`, `status`, `consentAt`, `verifiedAt`, `rejectionReason`. Never an identity number.
+
 ## Key relationships
 ```
 City 1─* Station 1─* Vehicle *─1 VehicleModel 1─* PricingPlan
@@ -65,4 +72,4 @@ User(staff) *─* City/Station via StaffAssignment
 - Return station must be in the same city as the pickup station (service validation).
 
 ## Seed data (Phase 2/3)
-Super admin, 1–2 cities, 2–3 stations each, 1 manager per city, 1 employee per station, ~10 scooters, 1 pricing plan, 1 demo customer.
+Super admin, 1–2 cities, 2–3 stations each, 1 manager per city, 1 employee per station, ~10 scooters, one default pricing plan per model (₹49/₹69/₹99 per hour), 1 demo customer (not identity-verified, so the first booking shows that step).

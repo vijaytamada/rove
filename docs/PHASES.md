@@ -40,6 +40,7 @@ Each phase ends with a usable increment and a completion checklist. Don't start 
 - **Outcome:** Admin/manager can set up network + fleet within their scope; customers can browse stations and scooters.
 
 ## Phase 4 — Customer Booking
+**Status: complete and fully tested** (see `docs/TESTING.md`). Backend: pricing plans (+ admin CRUD), quote, bookings with a 10-minute payment hold, overlap-proof availability, idempotent mock payment, cancellation refunds, mock KYC. Website and Flutter: city selector, station → scooter → start/duration → live quote → identity check → payment → confirmation (code + PIN), My bookings, booking detail with cancel. Website console: pricing plans. Decisions: `docs/PROJECT_PLAN.md`.
 - **Objective:** Customer can book and pay (simulated).
 - **Features:** availability search by station + time window; `PricingPlan` + upfront price quote (rental + deposit); booking creation (reserves vehicle, 10-min payment hold); `PaymentProvider` interface + mock; payment record; booking code + 6-digit PIN; confirmation; history; cancellation; mock KYC gate (`KycProvider` interface + mock, auto-verify) — the minimum needed to satisfy the "verification" step.
 - **Modules:** `Bookings`, `Pricing` (quote only — uses engine's rental part), `Payments` (+ mock provider), `Kyc` (mock), availability logic in `Bookings`.
