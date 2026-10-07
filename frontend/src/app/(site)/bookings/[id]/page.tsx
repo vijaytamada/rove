@@ -23,6 +23,9 @@ function timeline(b: BookingView): Step[] {
   const steps: Step[] = [{ label: "Booked", at: b.createdAt }];
   if (b.confirmedAt) steps.push({ label: "Paid and confirmed", at: b.confirmedAt });
   if (b.status === "EXPIRED") steps.push({ label: "Hold expired, nothing was charged", at: null });
+  if (b.rental) steps.push({ label: "Scooter picked up", at: b.rental.startedAt });
+  if (b.rental?.endedAt) steps.push({ label: "Scooter returned", at: b.rental.endedAt });
+  if (b.status === "NO_SHOW") steps.push({ label: "Marked as a no-show", at: null });
   if (b.cancelledAt) steps.push({ label: "Cancelled", at: b.cancelledAt });
   if (b.refundedAmount > 0) steps.push({ label: `${formatMoney(b.refundedAmount)} refunded`, at: null });
   return steps;
@@ -71,6 +74,25 @@ export default async function BookingPage({
         <p role="status" className="mt-6 rounded-control bg-accent-soft px-4 py-3 text-sm text-accent-ink">
           Booking cancelled.
           {booking.refundedAmount > 0 && ` ${formatMoney(booking.refundedAmount)} is on its way back to you.`}
+        </p>
+      )}
+
+      {booking.status === "IN_RIDE" && (
+        <p role="status" className="mt-6 rounded-control bg-accent-soft px-4 py-3 text-sm text-accent-ink">
+          Your ride is in progress. Bring the scooter back to any station in {booking.station.cityName} by{" "}
+          {formatDateTime(booking.endAt, tz)} to avoid late charges.
+        </p>
+      )}
+      {booking.status === "RETURNED" && booking.rental && (
+        <p role="status" className="mt-6 rounded-control bg-canvas px-4 py-3 text-sm text-ink-muted">
+          Returned{booking.rental.returnStationName ? ` to ${booking.rental.returnStationName}` : ""}
+          {booking.rental.distanceKm !== null ? ` after ${booking.rental.distanceKm} km` : ""}. Your deposit is held until the return is
+          checked and settled.
+        </p>
+      )}
+      {booking.status === "NO_SHOW" && (
+        <p role="status" className="mt-6 rounded-control bg-canvas px-4 py-3 text-sm text-ink-muted">
+          You didn&apos;t pick up the scooter, so the booking was closed. Your deposit was refunded; the rental charge is kept.
         </p>
       )}
 

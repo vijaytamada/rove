@@ -49,6 +49,7 @@ Each phase ends with a usable increment and a completion checklist. Don't start 
 - **Outcome:** Customer completes browse→book→pay→confirmed and sees code/PIN; cancellation releases the vehicle; overlapping booking attempts are rejected (tested).
 
 ## Phase 5 — Pickup & Return
+**Status: in progress on `feature/pickup-return` (not merged).** Done: backend (station desk API under `/station/bookings`, rentals, damage records, no-show with deposit refund, 20 e2e tests), website station desk (`/staff`, `/staff/bookings/[id]`, scooters moved to `/staff/fleet`), customer views of ride states on web and Flutter. Left: finish browser check of the no-show button, Flutter/web test runs and QA scripts (`pages.mjs`/`sweep.mjs`) for the new routes, docs (API, DATABASE, RBAC, UI, TESTING, decision log), then merge to `dev`.
 - **Objective:** Station operations of the rental.
 - **Features:** employee finds booking by code/phone; verifies PIN + customer; records start odometer, battery, pre-existing damage notes; start rental (`CONFIRMED → IN_RIDE`, vehicle `IN_RIDE`); return: end odometer (≥ start), battery, damage record, return station (same city); complete (`IN_RIDE → RETURNED`, vehicle → `AVAILABLE` or `MAINTENANCE` if damaged); no-show handling.
 - **Modules:** `Rentals` (pickup/return/inspection/damage), reuses `Bookings`, `Vehicles`.

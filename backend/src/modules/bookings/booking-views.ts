@@ -46,7 +46,7 @@ export interface BookingView {
   /** The rates the customer agreed to. */
   pricing: PlanRates & { planId: string };
   includedKm: number;
-  /** Pickup PIN. Only while the booking is confirmed or in progress. */
+  /** Pickup PIN. Only until the scooter is handed over. */
   pin: string | null;
   vehicle: { id: string; code: string; model: VehicleModelView };
   station: StationSummary;
@@ -109,7 +109,7 @@ export function toBookingView(b: BookingRow, pinSecret: string, now: Date): Book
     totalAmount: b.totalAmount,
     pricing: snapshot,
     includedKm: snapshot.includedKmPerHour * b.hours,
-    pin: b.status === 'CONFIRMED' || b.status === 'IN_RIDE' ? derivePin(pinSecret, b.id) : null,
+    pin: b.status === 'CONFIRMED' ? derivePin(pinSecret, b.id) : null,
     vehicle: { id: b.vehicle.id, code: b.vehicle.code, model: toModelView(b.vehicle.model) },
     station: toStationSummary(b.station),
     payment: latest ? { status: latest.status, chargeAmount: latest.chargeAmount, paidAt: latest.paidAt } : null,

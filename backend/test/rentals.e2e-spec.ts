@@ -140,7 +140,7 @@ describe('Station desk: pickup, return and no-show (e2e)', () => {
       const mine = await t.http().get(api(`/bookings/${booking.id}`)).set(s.customer.auth).expect(200);
       expect(mine.body).toMatchObject({ status: 'IN_RIDE', cancellation: { allowed: false } });
       expect(mine.body.rental.startedAt).toBeTruthy();
-      expect(mine.body.pin).toBe(booking.pin);
+      expect(mine.body.pin).toBeNull(); // the PIN has done its job
       expect((await t.http().get(api(`/stations/${s.a.id}`)).expect(200)).body.availableVehicles).toBe(0);
       await t.http().post(api(`/bookings/${booking.id}/cancel`)).set(s.customer.auth).expect(409);
     });
