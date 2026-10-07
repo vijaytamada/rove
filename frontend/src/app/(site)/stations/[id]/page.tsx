@@ -42,6 +42,12 @@ export default async function StationPage({ params }: { params: Promise<{ id: st
         </p>
       </div>
 
+      {!station.openNow && (
+        <p className="mt-6 rounded-control bg-canvas px-4 py-3 text-sm text-ink-muted">
+          This station is closed right now. You can still book a scooter for a time when it&apos;s open.
+        </p>
+      )}
+
       <h2 className="mt-10 text-lg font-semibold tracking-tight">
         Available now{vehicles ? ` (${vehicles.length})` : ""}
       </h2>

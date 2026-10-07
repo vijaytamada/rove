@@ -47,7 +47,7 @@ Public (no sign-in):
 | `GET /cities` | Active cities |
 | `GET /cities/:cityId/stations` | Active stations of an active city, each with `availableVehicles` |
 | `GET /stations/:id` | One active station |
-| `GET /stations/:id/vehicles` | Available scooters only (no registration number or odometer). Time-window availability arrives in Phase 4 |
+| `GET /stations/:id/vehicles` | Available scooters only (no registration number or odometer). Phase 4 adds the time window and prices (below) |
 
 Management (signed in; scope enforced by role):
 | Endpoint | Access |
@@ -63,9 +63,26 @@ Management (signed in; scope enforced by role):
 
 List endpoints take `?page&limit`. Codes added: `CITY_NOT_FOUND`, `CITY_EXISTS`, `INVALID_TIMEZONE`, `STATION_NOT_FOUND`, `STATION_EXISTS`, `INVALID_HOURS`, `STATION_FULL`, `MODEL_NOT_FOUND`, `MODEL_EXISTS`, `VEHICLE_NOT_FOUND`, `VEHICLE_CODE_TAKEN`, `REGISTRATION_TAKEN`, `VEHICLE_BUSY`, `VEHICLE_CHANGED`, `INVALID_STATUS_CHANGE`, `UNKNOWN_CITY`, `UNKNOWN_STATION`.
 
-### Phase 4 — Booking
-`POST /bookings/quote` · `POST /bookings` · `POST /bookings/:id/pay` (mock) · `GET /bookings` (mine) · `GET /bookings/:id` · `POST /bookings/:id/cancel`
-`POST /kyc/start` · `GET /kyc/status` (mock)
+### Phase 4 — Booking (implemented)
+Public:
+| Endpoint | Notes |
+|---|---|
+| `GET /vehicles/:id` | One scooter (no registration/odometer) with `pricing` and its `station` summary (incl. city `timezone`). Shown even while it is booked right now; 404 for retired scooters or inactive stations |
+| `GET /stations/:stationId/vehicles?startAt&hours` | Scooters free for the window (default: now for 1 hour). Booked scooters and unexpired payment holds are left out. Each scooter has `pricing` (null = no plan yet, cannot be booked). Stations also carry `openNow` |
+| `POST /bookings/quote` | Body `{ vehicleId, startAt?, hours }` (hours 1-24, start up to 7 days ahead, default now). Returns `rentalAmount`, `depositAmount`, `totalAmount`, `includedKm`, `startAt`, `endAt`, `pricing`, `station`, `holdMinutes`. Fails with the same errors a booking would (closed station, scooter booked, no plan) |
+
+Customers only (`CUSTOMER`; staff get 403):
+| Endpoint | Notes |
+|---|---|
+| `GET /kyc/status` · `POST /kyc/start` | Mock identity check. `start` needs `{ consent: true }` (`CONSENT_REQUIRED`) and verifies at once. Status `NOT_STARTED / PENDING / VERIFIED / REJECTED` |
+| `POST /bookings` | Same body as the quote. Needs a verified identity (`KYC_REQUIRED` 403). Holds the scooter for 10 minutes (`PENDING_PAYMENT`, `holdExpiresAt`). 409 `VEHICLE_NOT_AVAILABLE`, `OVERLAPPING_BOOKING` (you already have one then), `TOO_MANY_BOOKINGS` (5 open at once), `STATION_CLOSED` (start outside opening hours), `NO_PRICING_PLAN` |
+| `POST /bookings/:id/pay` | Mock checkout. Optional `Idempotency-Key` header (8-100 chars): the same key never charges twice (`IDEMPOTENCY_KEY_REUSED` if it belongs to another booking). Body `{ simulate: 'FAIL' }` makes the mock decline (never in production). Success: `CONFIRMED` with the PIN. 402 `PAYMENT_FAILED` keeps the hold so the customer can retry. 409 `ALREADY_PAID`, `PAYMENT_IN_PROGRESS`, `HOLD_EXPIRED` (a payment that lands after the hold ran out is refunded at once) |
+| `GET /bookings?tab=active\|upcoming\|past&page&limit` · `GET /bookings/:id` | Own bookings only (404 for others). Active = waiting for payment, started or in progress; upcoming = paid, not started; past = finished. A booking view has `code` (RV-XXXXXX), `pin` (only when confirmed/in progress), amounts, the agreed `pricing` snapshot, `payment`, `refundedAmount` and `cancellation { allowed, refundAmount, retainedAmount }` (what cancelling right now would do, so clients never work out money) |
+| `POST /bookings/:id/cancel` | Unpaid: nothing moves. Paid: everything back if cancelled 2+ hours before the start or within 10 minutes of paying, otherwise only the deposit (rental kept). 409 `CANNOT_CANCEL` once started, ended, cancelled or expired |
+
+Staff (read for all staff, write for super admins): `GET /manage/pricing-plans?modelId&cityId` · `POST /pricing-plans` · `PATCH /pricing-plans/:id`. One default plan per model (no city) and at most one per model and city; a city plan replaces the default there (`PLAN_EXISTS`, `INVALID_DAY_RATE`, `PLAN_NOT_FOUND`).
+A scooter with a live booking cannot be moved, retired or set to maintenance/offline (409 `VEHICLE_BOOKED`).
+Codes added: `KYC_REQUIRED`, `CONSENT_REQUIRED`, `INVALID_DURATION`, `INVALID_START`, `START_IN_PAST`, `START_TOO_FAR`, `STATION_CLOSED`, `NO_PRICING_PLAN`, `VEHICLE_NOT_AVAILABLE`, `OVERLAPPING_BOOKING`, `TOO_MANY_BOOKINGS`, `BOOKING_NOT_FOUND`, `ALREADY_PAID`, `BOOKING_NOT_PAYABLE`, `PAYMENT_FAILED`, `PAYMENT_IN_PROGRESS`, `HOLD_EXPIRED`, `IDEMPOTENCY_KEY_REUSED`, `INVALID_IDEMPOTENCY_KEY`, `SIMULATION_DISABLED`, `CANNOT_CANCEL`, `VEHICLE_BOOKED`, `PLAN_EXISTS`, `PLAN_NOT_FOUND`, `INVALID_DAY_RATE`.
 
 ### Phase 5 — Pickup & return (staff)
 `GET /station/bookings?code|phone|date` · `POST /bookings/:id/pickup` · `POST /bookings/:id/return` · `POST /bookings/:id/no-show`

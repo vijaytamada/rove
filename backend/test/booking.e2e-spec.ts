@@ -166,7 +166,7 @@ describe('Booking: KYC, pricing, holds, payment and cancellation (e2e)', () => {
     it('refuses a start time when the station is closed', async () => {
       const localHour = Number(new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Kolkata', hour: '2-digit', hourCycle: 'h23' }).format(new Date()));
       const pad = (h: number) => `${String(h % 24).padStart(2, '0')}:00`;
-      const setup = await t.makeBookable({ hours: { opensAt: pad(localHour + 2), closesAt: pad(localHour + 3) } });
+      const setup = await t.makeBookable({ hours: { opensAt: pad(localHour + 2), closesAt: pad(localHour + 5) } });
       const res = await quote({ vehicleId: setup.vehicleIds[0], hours: 1 }).expect(409);
       expect(res.body.code).toBe('STATION_CLOSED');
       // The same scooter is fine once the start falls inside opening hours (2.5 hours from now).
@@ -469,7 +469,7 @@ describe('Booking: KYC, pricing, holds, payment and cancellation (e2e)', () => {
       await book(b.auth, { vehicleId: setup.vehicleIds[0], hours: 1 }).expect(409);
 
       const results = await Promise.all([cancel(a.auth, paid.id), cancel(a.auth, paid.id)]);
-      expect(results.map((r) => r.status).sort()).toEqual([200, 409]);
+      expect(results.map((r) => r.status).sort((x, y) => x - y)).toEqual([200, 409]);
       expect(await t.prisma.refund.count({ where: { payment: { bookingId: paid.id } } })).toBe(1);
       expect((await cancel(a.auth, paid.id).expect(409)).body.code).toBe('CANNOT_CANCEL');
       await book(b.auth, { vehicleId: setup.vehicleIds[0], hours: 1 }).expect(201);
@@ -529,6 +529,18 @@ describe('Booking: KYC, pricing, holds, payment and cancellation (e2e)', () => {
       await t.prisma.vehicle.update({ where: { id: retired.id }, data: { retiredAt: new Date() } });
       await t.http().get(`/api/v1/vehicles/${retired.id}`).expect(404);
       await t.http().get('/api/v1/vehicles/nope').expect(400);
+    });
+
+    it('says whether a station is open right now, in the city time zone', async () => {
+      const localHour = Number(new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Kolkata', hour: '2-digit', hourCycle: 'h23' }).format(new Date()));
+      const pad = (h: number) => `${String(h % 24).padStart(2, '0')}:00`;
+      const always = await t.makeBookable();
+      const closed = await t.makeBookable({ hours: { opensAt: pad(localHour + 2), closesAt: pad(localHour + 3) } });
+      const open = await t.makeBookable({ hours: { opensAt: pad(localHour + 23), closesAt: pad(localHour + 1) } });
+      for (const [setup, expected] of [[always, true], [closed, false], [open, true]] as const) {
+        const res = await t.http().get(`/api/v1/stations/${setup.stationId}`).expect(200);
+        expect(res.body.openNow).toBe(expected);
+      }
     });
 
     it('lists a scooter without a price but marks it as such', async () => {

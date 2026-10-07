@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../format.dart';
 import '../models/fleet.dart';
 import '../theme/tokens.dart';
 import 'status_chip.dart';
@@ -28,7 +29,12 @@ class StationCard extends StatelessWidget {
                     child: Text(station.name,
                         style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
                   ),
-                  n > 0 ? StatusChip('$n available', tone: ChipTone.success) : const StatusChip('None available'),
+                  if (!station.openNow)
+                    const StatusChip('Closed now')
+                  else if (n > 0)
+                    StatusChip('$n available', tone: ChipTone.success)
+                  else
+                    const StatusChip('None available'),
                 ],
               ),
               const SizedBox(height: 10),
@@ -44,9 +50,12 @@ class StationCard extends StatelessWidget {
 }
 
 class ScooterCard extends StatelessWidget {
-  const ScooterCard({super.key, required this.vehicle});
+  const ScooterCard({super.key, required this.vehicle, this.onSelect});
 
   final VehiclePublicView vehicle;
+
+  /// Opens the booking screen. Hidden for a scooter without a price (it cannot be booked yet).
+  final VoidCallback? onSelect;
 
   @override
   Widget build(BuildContext context) {
@@ -80,6 +89,30 @@ class ScooterCard extends StatelessWidget {
                 _Spec(Icons.battery_5_bar_outlined, 'Battery', battery == null ? '–' : '$battery%'),
                 _Spec(Icons.route_outlined, 'Range', '${model.rangeKm} km'),
                 _Spec(Icons.speed_outlined, 'Top speed', '${model.topSpeedKmh} km/h'),
+              ],
+            ),
+            const SizedBox(height: 16),
+            Row(
+              children: [
+                Expanded(
+                  child: vehicle.pricing == null
+                      ? const Text('Not open for booking yet', style: TextStyle(color: Tokens.inkMuted))
+                      : Text.rich(TextSpan(children: [
+                          TextSpan(
+                              text: formatMoney(vehicle.pricing!.hourlyRateAmount),
+                              style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w600)),
+                          const TextSpan(text: ' / hour', style: TextStyle(color: Tokens.inkMuted)),
+                        ])),
+                ),
+                if (vehicle.pricing != null && onSelect != null)
+                  SizedBox(
+                    height: 44,
+                    child: FilledButton(
+                      onPressed: onSelect,
+                      style: FilledButton.styleFrom(minimumSize: const Size(96, 44)),
+                      child: const Text('Select'),
+                    ),
+                  ),
               ],
             ),
           ],

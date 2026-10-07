@@ -111,6 +111,15 @@ frontend/src/
 - The sidebar appears from 1280px; below that the console uses the top bar with scrolling links.
 - One-time codes use `<OtpInput>` (web) / `OtpField` (Flutter): one box per digit.
 
+### Booking flow (2026-10-07)
+- **City selection never lists cities side by side.** One city: a plain label, chosen for you. Several: one button with the current city that opens a list (website `<CitySelect>` in a `<Modal>`, app bottom sheet; a search box from 8 cities). Same on both clients.
+- Station list: availability chip (`N available`, `None available`, or `Closed now` outside opening hours). Scooter card: model, battery, range, speed, `₹49 / hour` and **Select**; a scooter without a price says "Not open for booking yet".
+- Booking screen (`/book/[vehicleId]`, app `BookScreen`): scooter details, "Rates and rules", **When do you start?** (Start now / Pick a time, up to 7 days ahead, in city time), **How long?** (1, 2, 3, 4, 6, 8, 12 hours, 1 day), **Your price** (rental, refundable deposit as its own line, total; error text from the backend when the slot is unavailable). The bar at the bottom (`StickyCta`) shows the total and **Continue**; on phones the tab bar is hidden on checkout pages. Signed-out visitors see "Sign in to book" and come back with their choices.
+- Continue goes to the identity check (once: consent checkbox, "Verify me"), then **Pay to confirm**: summary, hold countdown (10:00), demo note, "Pay ₹X". A failed payment shows the reason and allows a retry; when the hold runs out Pay is disabled and "Book it again" appears.
+- Booking detail: status chip, **booking code and pickup PIN** (large) once confirmed, green "Booking confirmed" note, pickup place and time, price, "Rates you agreed to", timeline, **Pay now** while unpaid, **Cancel booking** with a confirmation that spells out the refund (numbers from the backend).
+- My bookings: Active · Upcoming · Past. Home shows the booking that needs attention. Profile shows the identity check status.
+- Admin console: **Pricing** page (list, add dialog, edit page; rupees in forms, paise in the API).
+
 ### Profile (2026-10-04)
 - Details are **read-only by default**: a label, the value and a pencil button. Nothing looks like an input until the pencil is pressed.
 - **Name:** the pencil turns the row into a text box with Save and Cancel (inline, no popup).

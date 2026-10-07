@@ -40,6 +40,8 @@ Order matters: **infra → backend → web → emulator → Flutter**.
 
 Customers sign in with their phone number and a code, on the website (http://localhost:3000/login) and in the Flutter app; a new number creates an account after asking for a name. Staff, city managers and admins sign in with email and password at http://localhost:3000/login/staff (the website only; the Flutter app is customer-only).
 
+Mock payment and KYC: `PAYMENT_PROVIDER=mock` charges nothing (the pay screen has a "make this payment fail" box outside production) and `KYC_PROVIDER=mock` verifies the customer at once. Neither is allowed in production. Demo scooters are priced by `npm run prisma:seed` (one default plan per model).
+
 Mock OTP: verification codes are always `123456` and are logged by the backend. Never enabled in production (the app refuses to start with `OTP_PROVIDER=mock` when `NODE_ENV=production`).
 
 Backend takes ~15–20 s to start. Check it: open `http://localhost:3001/api/v1/health` → `{"status":"ok","checks":{"database":"up","redis":"up"}}`.

@@ -59,6 +59,8 @@ export interface StationView {
   status: "ACTIVE" | "INACTIVE";
   /** Scooters currently available to rent here. */
   availableVehicles: number;
+  /** Inside opening hours right now (city time). */
+  openNow: boolean;
 }
 
 export interface VehicleModelView {
