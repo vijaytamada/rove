@@ -2,6 +2,8 @@ import type {
   Booking,
   City,
   DamageRecord,
+  Payment,
+  Refund,
   Rental,
   Station,
   User,
@@ -47,6 +49,8 @@ export interface StaffBookingView {
   rentalAmount: number;
   depositAmount: number;
   totalAmount: number;
+  /** Money already returned to the customer (deposit refunds, cancellations, no-shows). */
+  refundedAmount: number;
   customer: { id: string; fullName: string; phone: string | null };
   vehicle: {
     id: string;
@@ -75,6 +79,7 @@ export type RentalRow = Rental & {
 };
 
 export type StaffBookingRow = Booking & {
+  payments: (Payment & { refunds: Refund[] })[];
   user: Pick<User, 'id' | 'fullName' | 'phone'>;
   vehicle: Vehicle & { model: VehicleModel };
   station: Station & { city: City };
@@ -85,6 +90,7 @@ export const STAFF_BOOKING_INCLUDE = {
   user: { select: { id: true, fullName: true, phone: true } },
   vehicle: { include: { model: true } },
   station: { include: { city: true } },
+  payments: { include: { refunds: true } },
   rental: {
     include: {
       returnStation: true,
@@ -135,6 +141,10 @@ export function toStaffBookingView(
     rentalAmount: b.rentalAmount,
     depositAmount: b.depositAmount,
     totalAmount: b.totalAmount,
+    refundedAmount: b.payments
+      .flatMap((p) => p.refunds)
+      .filter((r) => r.status === 'SUCCEEDED')
+      .reduce((sum, r) => sum + r.refundAmount, 0),
     customer: { id: b.user.id, fullName: b.user.fullName, phone: b.user.phone },
     vehicle: {
       id: b.vehicle.id,

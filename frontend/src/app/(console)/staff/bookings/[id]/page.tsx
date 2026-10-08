@@ -184,8 +184,9 @@ export default async function DeskBooking({
             </ul>
             <dl className="mt-4 divide-y divide-line border-t border-line">
               <Row label="Rental">{formatMoney(b.rentalAmount)}</Row>
-              <Row label="Deposit held">{formatMoney(b.depositAmount)}</Row>
+              <Row label="Deposit">{formatMoney(b.depositAmount)}</Row>
               <Row label="Paid">{formatMoney(b.totalAmount)}</Row>
+              {b.refundedAmount > 0 && <Row label="Refunded">{formatMoney(b.refundedAmount)}</Row>}
             </dl>
           </Panel>
           <Panel title="Scooter">

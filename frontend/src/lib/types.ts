@@ -250,6 +250,7 @@ export interface StaffBookingView {
   rentalAmount: number;
   depositAmount: number;
   totalAmount: number;
+  refundedAmount: number;
   customer: { id: string; fullName: string; phone: string | null };
   vehicle: {
     id: string;

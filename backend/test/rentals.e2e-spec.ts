@@ -362,7 +362,7 @@ describe('Station desk: pickup, return and no-show (e2e)', () => {
 
       await t.http().post(api(`/station/bookings/${early.id}/no-show`)).set(s.empB.auth).expect(403);
       const res = await t.http().post(api(`/station/bookings/${early.id}/no-show`)).set(s.empA.auth).expect(200);
-      expect(res.body.status).toBe('NO_SHOW');
+      expect(res.body).toMatchObject({ status: 'NO_SHOW', refundedAmount: 100000 });
 
       const mine = await t.http().get(api(`/bookings/${early.id}`)).set(s.customer.auth).expect(200);
       expect(mine.body).toMatchObject({ status: 'NO_SHOW', refundedAmount: 100000, pin: null });

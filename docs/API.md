@@ -84,8 +84,20 @@ Staff (read for all staff, write for super admins): `GET /manage/pricing-plans?m
 A scooter with a live booking cannot be moved, retired or set to maintenance/offline (409 `VEHICLE_BOOKED`).
 Codes added: `KYC_REQUIRED`, `CONSENT_REQUIRED`, `INVALID_DURATION`, `INVALID_START`, `START_IN_PAST`, `START_TOO_FAR`, `STATION_CLOSED`, `NO_PRICING_PLAN`, `VEHICLE_NOT_AVAILABLE`, `OVERLAPPING_BOOKING`, `TOO_MANY_BOOKINGS`, `BOOKING_NOT_FOUND`, `ALREADY_PAID`, `BOOKING_NOT_PAYABLE`, `PAYMENT_FAILED`, `PAYMENT_IN_PROGRESS`, `HOLD_EXPIRED`, `IDEMPOTENCY_KEY_REUSED`, `INVALID_IDEMPOTENCY_KEY`, `SIMULATION_DISABLED`, `CANNOT_CANCEL`, `VEHICLE_BOOKED`, `PLAN_EXISTS`, `PLAN_NOT_FOUND`, `INVALID_DAY_RATE`.
 
-### Phase 5 — Pickup & return (staff)
-`GET /station/bookings?code|phone|date` · `POST /bookings/:id/pickup` · `POST /bookings/:id/return` · `POST /bookings/:id/no-show`
+### Phase 5 - Pickup & return (station desk)
+All routes are under `/station/bookings`, for `STATION_EMPLOYEE`, `CITY_MANAGER` and `SUPER_ADMIN`, and are scoped (see `docs/RBAC.md`). The responses are a staff view of the booking (`StaffBookingView`): customer name and phone, scooter with last odometer and battery, `rental` (readings, damage records, who handled it), `refundedAmount`, `pickupOpensAt`, `noShowFrom`, and `actions` = `{ pickup, return, noShow }`, each `{ allowed, reason? }` in plain language so a client never has to re-derive the rules. The **pickup PIN is never in a staff response**.
+
+| Route | What it does |
+|---|---|
+| `GET /station/bookings?tab&q&stationId&page&limit` | The desk queue. `tab`: `pickups` (paid, waiting, not over; default), `rides` (out now - the whole city sees these, because any station of the city may take the scooter back), `past` (returned or no-show in the last 7 days; also shown at the station that took the scooter back). `q` searches booking code, phone digits or customer name; with `q` and no `tab` it looks everywhere. `stationId` narrows to one station you may use |
+| `GET /station/bookings/:id` | One booking. Other stations' bookings are 404 `BOOKING_NOT_FOUND`, not 403 |
+| `POST /station/bookings/:id/pickup` | Hand the scooter over. Body `{ pin (6 digits), idChecked: true, startOdometerKm, startBatteryPercent, damages?: [{ description, severity }], replacementVehicleId?, swapReason? }`. Allowed from 15 minutes before the start until the booked time is over. `CONFIRMED -> IN_RIDE`, scooter `IN_RIDE` and out of its station slot, a `Rental` is created. A **replacement** (a faulty booked scooter) must be free, at the same station and the same model, and needs `swapReason`; the booking then points at the new scooter. Five wrong PINs lock pickup for that booking for 15 minutes (`PIN_LOCKED`) |
+| `POST /station/bookings/:id/return` | Take the scooter back. Body `{ returnStationId, endOdometerKm, endBatteryPercent, damages?: [{ description, severity, feeAmount? }], sendToMaintenance? }`. The return station must be active, in the **same city** as the booking, have a free slot, and be one you operate. End odometer must not be below the start and at most 2000 km further. `IN_RIDE -> RETURNED`; the scooter moves to the return station and becomes `AVAILABLE`, or `MAINTENANCE` when any damage is MODERATE or MAJOR or `sendToMaintenance` is set; odometer and battery are written to the scooter. No money moves yet (Phase 6) |
+| `POST /station/bookings/:id/no-show` | Allowed once an hour has passed since the start (or the booking has ended, if sooner). `CONFIRMED -> NO_SHOW`; the deposit is refunded through the payment provider (reason `NO_SHOW`), the rental charge is kept, the scooter is bookable again |
+
+Codes added: `PICKUP_NOT_ALLOWED`, `RETURN_NOT_ALLOWED`, `NO_SHOW_NOT_ALLOWED` (all 409, the message says why), `PIN_INVALID`, `PIN_LOCKED`, `SWAP_REASON_REQUIRED`, `REPLACEMENT_NOT_AVAILABLE`, `RETURN_CITY_MISMATCH`, `RETURN_STATION_INACTIVE`, `STATION_FULL`, `ODOMETER_TOO_FAR`, plus the existing `FORBIDDEN_SCOPE` and `BOOKING_NOT_FOUND`.
+
+Customer side: `GET /bookings` and `/bookings/:id` now also carry the ride states (`IN_RIDE`, `RETURNED`, `NO_SHOW`) and a `rental` summary (`startedAt`, `endedAt`, `distanceKm`, `returnStationName`).
 
 ### Phase 6 — Settlement
 `GET /bookings/:id/settlement` · `POST /settlements/:id/collect` (mock) · `GET /settlements?status=OUTSTANDING` (staff/manager)
