@@ -59,6 +59,7 @@ Map<String, dynamic> bookingJson({
   int refunded = 0,
   DateTime? start,
   DateTime? holdExpiresAt,
+  Map<String, dynamic>? rental,
 }) {
   final s = start ?? DateTime.now().toUtc().add(const Duration(minutes: 5));
   return {
@@ -84,6 +85,7 @@ Map<String, dynamic> bookingJson({
     'station': _stationSummary,
     'payment': null,
     'refundedAmount': refunded,
+    'rental': rental,
     'cancellation': cancellation ?? {'allowed': status == 'PENDING_PAYMENT', 'refundAmount': 0, 'retainedAmount': 0},
   };
 }
@@ -151,9 +153,9 @@ class FakeBackend {
     if (path.endsWith('/bookings') && r.method == 'GET') {
       final tab = r.url.queryParameters['tab'];
       final wanted = switch (tab) {
-        'active' => ['PENDING_PAYMENT'],
+        'active' => ['PENDING_PAYMENT', 'IN_RIDE'],
         'upcoming' => ['CONFIRMED'],
-        _ => ['CANCELLED', 'EXPIRED'],
+        _ => ['CANCELLED', 'EXPIRED', 'RETURNED', 'NO_SHOW'],
       };
       final items = bookings.values.where((b) => wanted.contains(b['status'])).toList();
       return json(200, {'items': items, 'total': items.length, 'page': 1, 'limit': 50});
@@ -451,6 +453,55 @@ void main() {
     await tester.pumpAndSettle();
     expect(env.to('/cancel'), hasLength(1));
     expect(find.textContaining('is on its way back to you'), findsOneWidget);
+  });
+
+  testWidgets('a ride in progress, a returned ride and a no-show each say what happened', (tester) async {
+    final backend = FakeBackend()..kycVerified = true;
+    final started = DateTime.now().toUtc().subtract(const Duration(hours: 1)).toIso8601String();
+    backend.bookings['r1'] = bookingJson(
+      id: 'r1',
+      status: 'IN_RIDE',
+      cancellation: {'allowed': false, 'refundAmount': 0, 'retainedAmount': 0},
+      rental: {'startedAt': started, 'endedAt': null, 'distanceKm': null, 'returnStationName': null},
+    );
+    backend.bookings['r2'] = bookingJson(
+      id: 'r2',
+      status: 'RETURNED',
+      cancellation: {'allowed': false, 'refundAmount': 0, 'retainedAmount': 0},
+      rental: {'startedAt': started, 'endedAt': started, 'distanceKm': 12.5, 'returnStationName': 'MG Road'},
+    );
+    backend.bookings['r3'] = bookingJson(
+      id: 'r3',
+      status: 'NO_SHOW',
+      refunded: 100000,
+      cancellation: {'allowed': false, 'refundAmount': 0, 'retainedAmount': 0},
+    );
+    final env = TestEnv(backend.handle);
+    await signInAndOpen(tester, env);
+    await openTab(tester, 'Bookings');
+
+    expect(find.text('In ride'), findsOneWidget);
+    await tester.tap(find.text('In ride'));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('Your ride is in progress. Bring the scooter back to any station in Bengaluru'), findsOneWidget);
+    expect(find.text('Cancel booking'), findsNothing);
+    expect(find.text('Scooter picked up'), findsOneWidget);
+    await tester.pageBack();
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Past'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Returned'));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('Returned to MG Road after 12.5 km'), findsOneWidget);
+    expect(find.text('Scooter returned'), findsOneWidget);
+    await tester.pageBack();
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('No show'));
+    await tester.pumpAndSettle();
+    expect(find.textContaining("You didn't pick up the scooter"), findsOneWidget);
+    expect(find.text('Marked as a no-show'), findsOneWidget);
   });
 
   testWidgets('a late cancellation says the rental is kept', (tester) async {

@@ -32,7 +32,7 @@ export function SiteHeader({ user }: { user: UserView | null }) {
             {user?.role === "CUSTOMER" && <NavLink href="/bookings">Bookings</NavLink>}
             {user && <NavLink href="/profile">Profile</NavLink>}
             {consoleHref && (
-              <NavLink href={consoleHref}>{user?.role === "STATION_EMPLOYEE" ? "Station console" : "Admin"}</NavLink>
+              <NavLink href={consoleHref}>{user?.role === "STATION_EMPLOYEE" ? "Station desk" : "Admin"}</NavLink>
             )}
           </nav>
         </div>

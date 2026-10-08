@@ -90,7 +90,7 @@ Web: Tailwind + **shadcn/ui** (Radix) customized to the tokens above. Flutter: M
 12. Profile
 
 ## 7. Staff screens (MVP)
-- **Employee (mobile/tablet):** today's queue with search by code/phone; pickup form; return form; settlement result.
+- **Employee (website, phone and desktop):** the **Station desk** at `/staff`: three queues (Pickups, On a ride, Done), one search box (booking code, phone or name; searching without a queue looks everywhere), a station filter for managers and admins. Each row ends with the next step as a button: *Hand over*, *Take back*, *No-show?* or *Open*. The booking page `/staff/bookings/[id]` shows the customer, booking, scooter and ride, and offers only what is allowed right now, with the reason in plain words when nothing is. Scooters moved to `/staff/fleet` ("Scooters" in the console navigation).
 - **Manager/Admin (desktop):** cities, stations, fleet table + status, pricing plans, staff; dashboards in Phase 7.
 
 ## 8. Frontend structure
@@ -119,6 +119,11 @@ frontend/src/
 - Booking detail: status chip, **booking code and pickup PIN** (large) once confirmed, green "Booking confirmed" note, pickup place and time, price, "Rates you agreed to", timeline, **Pay now** while unpaid, **Cancel booking** with a confirmation that spells out the refund (numbers from the backend).
 - My bookings: Active · Upcoming · Past. Home shows the booking that needs attention. Profile shows the identity check status.
 - Admin console: **Pricing** page (list, add dialog, edit page; rupees in forms, paise in the API).
+
+### Station desk (2026-10-08)
+- **Hand over** form: the customer's 6-digit PIN, a checkbox "I have checked the customer's ID", odometer and battery at start, damage already on the scooter (add rows), and, if the booked scooter is faulty, a replacement of the same model with a reason. **Take back** form: return station (same city), odometer and battery at the end, new damage with a flat fee, "send to maintenance". **Mark as no-show** asks first and says what happens to the money (deposit refunded, rental kept).
+- The booking page shows a green banner after each action, the rental readings and damage records once there is a ride, and a **Refunded** row when money has gone back.
+- Customers see the ride states on both clients: *On a ride*, *Returned* (with the distance and return station) and *No-show*. Web: `/bookings/[id]`; app: booking detail. The desk itself is website-only.
 
 ### Profile (2026-10-04)
 - Details are **read-only by default**: a label, the value and a pencil button. Nothing looks like an input until the pencil is pressed.

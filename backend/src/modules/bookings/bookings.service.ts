@@ -7,6 +7,7 @@ import type { Env } from '../../config/env.js';
 import { Prisma } from '../../generated/prisma/client.js';
 import { PrismaService } from '../../infra/prisma/prisma.service.js';
 import { PAYMENT_PROVIDER, type PaymentProvider } from '../../providers/payment/payment.provider.js';
+import { PaymentsService } from '../payments/payments.service.js';
 import { KycService } from '../kyc/kyc.service.js';
 import { PricingPlansService, type PricingView } from '../pricing/pricing-plans.service.js';
 import { quoteRental, type RentalQuote } from '../pricing/rental-quote.js';
@@ -54,6 +55,7 @@ export class BookingsService {
     @Inject(PricingPlansService) private readonly plans: PricingPlansService,
     @Inject(KycService) private readonly kyc: KycService,
     @Inject(PAYMENT_PROVIDER) private readonly payments: PaymentProvider,
+    @Inject(PaymentsService) private readonly refunds: PaymentsService,
     @Inject(ConfigService) config: ConfigService<Env, true>,
   ) {
     this.pinSecret = config.get('JWT_ACCESS_SECRET', { infer: true });
@@ -240,7 +242,7 @@ export class BookingsService {
       return done.count === 1;
     });
     if (!confirmed) {
-      await this.refund(payment.id, payment.chargeAmount, charge.providerRef, 'CANCELLATION');
+      await this.refunds.refund(payment.id, payment.chargeAmount, charge.providerRef, 'CANCELLATION');
       await this.prisma.booking.updateMany({
         where: { id, status: 'PENDING_PAYMENT' },
         data: { status: 'EXPIRED' },
@@ -301,7 +303,7 @@ export class BookingsService {
     });
 
     if (result.outcome.refundAmount > 0 && result.paid) {
-      await this.refund(result.paid.id, result.outcome.refundAmount, result.paid.providerRef, 'CANCELLATION');
+      await this.refunds.refund(result.paid.id, result.outcome.refundAmount, result.paid.providerRef, 'CANCELLATION');
     }
     return this.view(user.id, id);
   }
@@ -373,22 +375,6 @@ export class BookingsService {
     await this.prisma.booking.updateMany({
       where: { userId, status: 'PENDING_PAYMENT', holdExpiresAt: { lte: now } },
       data: { status: 'EXPIRED' },
-    });
-  }
-
-  private async refund(paymentId: string, amount: number, providerRef: string | null, reason: 'CANCELLATION') {
-    const result = providerRef
-      ? await this.payments.refund({ providerRef, amount, idempotencyKey: `refund-${paymentId}-${reason}` })
-      : ({ ok: false, reason: 'The payment has no gateway reference.' } as const);
-    await this.prisma.refund.create({
-      data: {
-        paymentId,
-        refundAmount: amount,
-        status: result.ok ? 'SUCCEEDED' : 'FAILED',
-        reason,
-        provider: this.payments.name,
-        providerRef: result.ok ? result.providerRef : null,
-      },
     });
   }
 

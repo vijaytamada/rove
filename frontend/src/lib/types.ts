@@ -178,7 +178,7 @@ export interface BookingView {
   totalAmount: number;
   pricing: PricingView;
   includedKm: number;
-  /** Pickup PIN, only while confirmed or in progress. */
+  /** Pickup PIN, only until the scooter is handed over. */
   pin: string | null;
   vehicle: { id: string; code: string; model: VehicleModelView };
   station: StationSummary;
@@ -186,6 +186,8 @@ export interface BookingView {
   refundedAmount: number;
   /** What cancelling right now would do. */
   cancellation: { allowed: boolean; refundAmount: number; retainedAmount: number };
+  /** The ride itself, once the scooter was handed over. */
+  rental: { startedAt: string; endedAt: string | null; distanceKm: number | null; returnStationName: string | null } | null;
 }
 
 export interface PricingPlanView {
@@ -204,3 +206,67 @@ export interface PricingPlanView {
   lateFeePerHourAmount: number;
   depositAmount: number;
 }
+
+// ---- Station desk (Phase 5) ----
+
+export interface DamageView {
+  id: string;
+  phase: "PICKUP" | "RETURN";
+  description: string;
+  severity: "MINOR" | "MODERATE" | "MAJOR";
+  /** Flat charge in paise, settled in Phase 6. */
+  feeAmount: number;
+}
+
+export interface RentalDetail {
+  startedAt: string;
+  endedAt: string | null;
+  startOdometerKm: number;
+  endOdometerKm: number | null;
+  distanceKm: number | null;
+  startBatteryPercent: number;
+  endBatteryPercent: number | null;
+  pickupEmployee: string;
+  returnEmployee: string | null;
+  returnStation: { id: string; name: string } | null;
+  swapReason: string | null;
+  damages: DamageView[];
+}
+
+export interface Allowed {
+  allowed: boolean;
+  reason?: string;
+}
+
+/** A booking as the station sees it. Never contains the pickup PIN. */
+export interface StaffBookingView {
+  id: string;
+  code: string;
+  status: BookingStatus;
+  startAt: string;
+  endAt: string;
+  hours: number;
+  createdAt: string;
+  rentalAmount: number;
+  depositAmount: number;
+  totalAmount: number;
+  refundedAmount: number;
+  customer: { id: string; fullName: string; phone: string | null };
+  vehicle: {
+    id: string;
+    code: string;
+    model: VehicleModelView;
+    odometerKm: number;
+    batteryPercent: number | null;
+    status: VehicleStatus;
+  };
+  station: StationSummary;
+  rental: RentalDetail | null;
+  pickupOpensAt: string;
+  noShowFrom: string;
+  actions: { pickup: Allowed; return: Allowed; noShow: Allowed };
+  returnStations: { id: string; name: string }[];
+  swapOptions: { id: string; code: string; batteryPercent: number | null }[];
+}
+
+export type DeskTab = "pickups" | "rides" | "past";

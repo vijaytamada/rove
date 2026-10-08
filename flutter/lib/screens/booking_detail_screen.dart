@@ -119,6 +119,21 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
           FormBanner.success(
               'Booking cancelled.${b.refundedAmount > 0 ? ' ${formatMoney(b.refundedAmount)} is on its way back to you.' : ''}'),
         ],
+        if (b.status == BookingStatus.inRide) ...[
+          const SizedBox(height: 16),
+          FormBanner.success(
+              'Your ride is in progress. Bring the scooter back to any station in ${b.station.cityName} by ${formatDateTime(b.endAt, tz)} to avoid late charges.'),
+        ],
+        if (b.status == BookingStatus.returned && b.rental != null) ...[
+          const SizedBox(height: 16),
+          FormBanner.notice(
+              'Returned${b.rental!.returnStationName == null ? '' : ' to ${b.rental!.returnStationName}'}${b.rental!.distanceKm == null ? '' : ' after ${b.rental!.distanceKm} km'}. Your deposit is held until the return is checked and settled.'),
+        ],
+        if (b.status == BookingStatus.noShow) ...[
+          const SizedBox(height: 16),
+          const FormBanner.notice(
+              "You didn't pick up the scooter, so the booking was closed. Your deposit was refunded; the rental charge is kept."),
+        ],
         if (b.pin != null) ...[
           const SizedBox(height: 16),
           Card(
@@ -203,6 +218,9 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
   List<(String, DateTime?)> _timeline(BookingView b) => [
         ('Booked', b.createdAt),
         if (b.confirmedAt != null) ('Paid and confirmed', b.confirmedAt),
+        if (b.rental != null) ('Scooter picked up', b.rental!.startedAt),
+        if (b.rental?.endedAt != null) ('Scooter returned', b.rental!.endedAt),
+        if (b.status == BookingStatus.noShow) ('Marked as a no-show', null),
         if (b.status == BookingStatus.expired) ('Hold expired, nothing was charged', null),
         if (b.cancelledAt != null) ('Cancelled', b.cancelledAt),
         if (b.refundedAmount > 0) ('${formatMoney(b.refundedAmount)} refunded', null),

@@ -69,7 +69,19 @@ enum RefundStatus {
 
 enum RefundReason {
   CANCELLATION
+  NO_SHOW // the deposit comes back, the rental is kept
   DEPOSIT_RETURN // Phase 6
+}
+
+enum DamagePhase {
+  PICKUP // already there when the customer took the scooter
+  RETURN
+}
+
+enum DamageSeverity {
+  MINOR
+  MODERATE
+  MAJOR
 }
 
 enum KycStatus {
@@ -95,6 +107,10 @@ model User {
   assignments   StaffAssignment[]
   bookings      Booking[]
   kyc           KycRecord?
+
+  pickupsHandled Rental[]       @relation("RentalPickupEmployee")
+  returnsHandled Rental[]       @relation("RentalReturnEmployee")
+  damagesLogged  DamageRecord[]
 
   @@index([role])
 }
@@ -168,6 +184,8 @@ model Station {
   vehicles    Vehicle[]
   assignments StaffAssignment[]
   bookings    Booking[]
+  pickups     Rental[]          @relation("RentalPickupStation")
+  returns     Rental[]          @relation("RentalReturnStation")
 
   @@unique([cityId, name])
   @@index([cityId])
@@ -210,6 +228,7 @@ model Vehicle {
   model    VehicleModel @relation(fields: [modelId], references: [id], onDelete: Restrict)
   station  Station?     @relation(fields: [stationId], references: [id], onDelete: Restrict)
   bookings Booking[]
+  rentals  Rental[]
 
   @@index([stationId, status])
   @@index([modelId])
@@ -268,6 +287,7 @@ model Booking {
   vehicle  Vehicle   @relation(fields: [vehicleId], references: [id], onDelete: Restrict)
   station  Station   @relation(fields: [stationId], references: [id], onDelete: Restrict)
   payments Payment[]
+  rental   Rental?
 
   @@index([userId, createdAt])
   @@index([userId, status])
@@ -325,4 +345,56 @@ model KycRecord {
   updatedAt       DateTime  @updatedAt
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+// The physical ride of a booking: created when staff hand the scooter over, completed when it is brought back.
+// Readings are taken by staff. The late fee, extra km and damage charges are settled in Phase 6.
+model Rental {
+  id                  String    @id @default(uuid()) @db.Uuid
+  bookingId           String    @unique @db.Uuid
+  vehicleId           String    @db.Uuid
+  pickupStationId     String    @db.Uuid
+  returnStationId     String?   @db.Uuid
+  pickupEmployeeId    String    @db.Uuid
+  returnEmployeeId    String?   @db.Uuid
+  startedAt           DateTime
+  endedAt             DateTime?
+  startOdometerKm     Float
+  endOdometerKm       Float?
+  startBatteryPercent Int
+  endBatteryPercent   Int?
+  // Set when staff handed over a different scooter than the one booked (same model); the booking points to the new one.
+  originalVehicleId   String?   @db.Uuid
+  swapReason          String?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  booking        Booking        @relation(fields: [bookingId], references: [id], onDelete: Restrict)
+  vehicle        Vehicle        @relation(fields: [vehicleId], references: [id], onDelete: Restrict)
+  pickupStation  Station        @relation("RentalPickupStation", fields: [pickupStationId], references: [id], onDelete: Restrict)
+  returnStation  Station?       @relation("RentalReturnStation", fields: [returnStationId], references: [id], onDelete: Restrict)
+  pickupEmployee User           @relation("RentalPickupEmployee", fields: [pickupEmployeeId], references: [id], onDelete: Restrict)
+  returnEmployee User?          @relation("RentalReturnEmployee", fields: [returnEmployeeId], references: [id], onDelete: Restrict)
+  damages        DamageRecord[]
+
+  @@index([vehicleId])
+  @@index([pickupStationId])
+}
+
+// Damage noted at handover (already there) or at return (new). `feeAmount` is a flat amount entered by staff,
+// charged against the deposit in Phase 6.
+model DamageRecord {
+  id           String         @id @default(uuid()) @db.Uuid
+  rentalId     String         @db.Uuid
+  phase        DamagePhase
+  description  String
+  severity     DamageSeverity
+  feeAmount    Int            @default(0)
+  recordedById String         @db.Uuid
+  createdAt    DateTime       @default(now())
+
+  rental     Rental @relation(fields: [rentalId], references: [id], onDelete: Cascade)
+  recordedBy User   @relation(fields: [recordedById], references: [id], onDelete: Restrict)
+
+  @@index([rentalId])
 }

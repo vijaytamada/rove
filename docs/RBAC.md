@@ -47,6 +47,12 @@ A user has exactly one role. Role is in the JWT; **scope is loaded from DB (cach
 | Dashboards | global | city | station | own |
 | View audit log | ✓ | own cities (read) | — | — |
 
+## Station desk scope (Phase 5)
+- `STATION_EMPLOYEE` acts on bookings of the stations they are assigned to; `CITY_MANAGER` on every station in their cities; `SUPER_ADMIN` everywhere. Pickup and no-show need the booking's pickup station to be one you operate (`FORBIDDEN_SCOPE` otherwise).
+- A scooter that is out on a ride can be taken back by staff of **any station in the booking's city** (they see it under "On a ride"), but only to a station they operate. Staff of other cities get 404 for it.
+- Reading another station's booking is 404, not 403, so its existence is not revealed. Staff responses never include the pickup PIN.
+- All desk routes need `STATION_EMPLOYEE`, `CITY_MANAGER` or `SUPER_ADMIN`; customers get 403. The e2e suite covers each role and scope, and the QA sweep checks every desk route rejects anonymous and wrong-role callers.
+
 ## Notes
 - Employee "own station" for a return means the **return station** (the vehicle may have been picked up elsewhere).
 - Customers cannot book without a verified identity check (`KYC_REQUIRED`); the outstanding-settlement block arrives in Phase 6. Phase 4: booking, payment, cancel and the identity check are `CUSTOMER`-only routes (staff get 403, even admins); pricing plans are readable by all staff and writable by super admins only; a customer sees only their own bookings (404 for others).

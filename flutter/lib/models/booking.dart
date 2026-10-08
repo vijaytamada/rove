@@ -117,6 +117,23 @@ class CancellationOutcome {
       );
 }
 
+/// The ride itself, once the scooter was handed over.
+class RentalSummary {
+  const RentalSummary({required this.startedAt, this.endedAt, this.distanceKm, this.returnStationName});
+
+  final DateTime startedAt;
+  final DateTime? endedAt;
+  final double? distanceKm;
+  final String? returnStationName;
+
+  factory RentalSummary.fromJson(Map<String, dynamic> json) => RentalSummary(
+        startedAt: _time(json['startedAt']),
+        endedAt: _timeOrNull(json['endedAt']),
+        distanceKm: (json['distanceKm'] as num?)?.toDouble(),
+        returnStationName: json['returnStationName'] as String?,
+      );
+}
+
 class BookingView {
   const BookingView({
     required this.id,
@@ -137,6 +154,7 @@ class BookingView {
     required this.station,
     required this.refundedAmount,
     required this.cancellation,
+    this.rental,
     this.holdExpiresAt,
     this.confirmedAt,
     this.cancelledAt,
@@ -167,6 +185,7 @@ class BookingView {
   final StationSummary station;
   final int refundedAmount;
   final CancellationOutcome cancellation;
+  final RentalSummary? rental;
 
   factory BookingView.fromJson(Map<String, dynamic> json) {
     final vehicle = json['vehicle'] as Map<String, dynamic>;
@@ -193,6 +212,7 @@ class BookingView {
       station: StationSummary.fromJson(json['station'] as Map<String, dynamic>),
       refundedAmount: (json['refundedAmount'] as num).toInt(),
       cancellation: CancellationOutcome.fromJson(json['cancellation'] as Map<String, dynamic>),
+      rental: json['rental'] == null ? null : RentalSummary.fromJson(json['rental'] as Map<String, dynamic>),
     );
   }
 }

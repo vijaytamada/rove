@@ -31,7 +31,8 @@ export async function ConsoleShell({ children }: { children: ReactNode }) {
           { href: "/admin/staff", label: "Staff", icon: Users },
         ]
       : []),
-    { href: "/staff", label: "Station console", icon: Truck },
+    { href: "/staff", label: "Station desk", icon: Truck, exact: true },
+    { href: "/staff/fleet", label: "Scooters", icon: Bike },
     { href: "/profile", label: "Profile", icon: User },
   ];
 

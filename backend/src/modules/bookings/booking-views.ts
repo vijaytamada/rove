@@ -4,6 +4,7 @@ import type {
   Payment,
   PaymentStatus,
   Refund,
+  Rental,
   Station,
   Vehicle,
   VehicleModel,
@@ -45,7 +46,7 @@ export interface BookingView {
   /** The rates the customer agreed to. */
   pricing: PlanRates & { planId: string };
   includedKm: number;
-  /** Pickup PIN. Only while the booking is confirmed or in progress. */
+  /** Pickup PIN. Only until the scooter is handed over. */
   pin: string | null;
   vehicle: { id: string; code: string; model: VehicleModelView };
   station: StationSummary;
@@ -54,18 +55,22 @@ export interface BookingView {
   refundedAmount: number;
   /** What cancelling right now would do, so the client never works it out itself. */
   cancellation: CancellationOutcome;
+  /** The ride itself, once the scooter has been handed over. */
+  rental: { startedAt: Date; endedAt: Date | null; distanceKm: number | null; returnStationName: string | null } | null;
 }
 
 export type BookingRow = Booking & {
   vehicle: Vehicle & { model: VehicleModel };
   station: Station & { city: City };
   payments: (Payment & { refunds: Refund[] })[];
+  rental: (Rental & { returnStation: Station | null }) | null;
 };
 
 export const BOOKING_INCLUDE = {
   vehicle: { include: { model: true } },
   station: { include: { city: true } },
   payments: { include: { refunds: true }, orderBy: { createdAt: 'desc' as const } },
+  rental: { include: { returnStation: true } },
 } as const;
 
 export const toStationSummary = (s: Station & { city: City }): StationSummary => ({
@@ -104,11 +109,22 @@ export function toBookingView(b: BookingRow, pinSecret: string, now: Date): Book
     totalAmount: b.totalAmount,
     pricing: snapshot,
     includedKm: snapshot.includedKmPerHour * b.hours,
-    pin: b.status === 'CONFIRMED' || b.status === 'IN_RIDE' ? derivePin(pinSecret, b.id) : null,
+    pin: b.status === 'CONFIRMED' ? derivePin(pinSecret, b.id) : null,
     vehicle: { id: b.vehicle.id, code: b.vehicle.code, model: toModelView(b.vehicle.model) },
     station: toStationSummary(b.station),
     payment: latest ? { status: latest.status, chargeAmount: latest.chargeAmount, paidAt: latest.paidAt } : null,
     refundedAmount,
     cancellation: cancellationOutcome(b, now),
+    rental: b.rental
+      ? {
+          startedAt: b.rental.startedAt,
+          endedAt: b.rental.endedAt,
+          distanceKm:
+            b.rental.endOdometerKm === null
+              ? null
+              : Math.round((b.rental.endOdometerKm - b.rental.startOdometerKm) * 10) / 10,
+          returnStationName: b.rental.returnStation?.name ?? null,
+        }
+      : null,
   };
 }
