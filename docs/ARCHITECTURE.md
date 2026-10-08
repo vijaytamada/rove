@@ -86,7 +86,7 @@ Transitions are implemented in one service method each, inside a DB transaction,
 3. **Return:** employee records end odometer/battery/damage/return station → booking `RETURNED`, vehicle `AVAILABLE|MAINTENANCE`, vehicle's `stationId` = return station → engine computes final charges → `Settlement` → refund (provider) or outstanding → booking `SETTLED`.
 
 ## 7. Pricing engine
-`pricing/engine.ts`: `calculateQuote(plan, window)` and `calculateFinalCharges(plan, booking, rental)` → `{ rental, extraKmFee, lateFee, damageFee, total, lineItems[] }`. Inputs are plain data (integers, Date); no I/O. Table-driven Jest tests. Plan values are **snapshotted onto the booking** at creation so later plan edits don't change old bookings.
+`pricing/rental-quote.ts`: `quoteRental(plan, hours)`. `pricing/settlement-charges.ts`: `calculateFinalCharges(plan, ride)` → `{ lines[], totalCharges, depositHeld, refundAmount, outstandingAmount, outcome }`; `settlements/settlements.service.ts` stores the result and moves the money. Inputs are plain data (integers, Date); no I/O. Table-driven Vitest tests. Plan values are **snapshotted onto the booking** at creation so later plan edits don't change old bookings.
 
 ## 8. Cross-cutting
 - **Auth:** access JWT (15 min) + refresh token (7–30 days, hashed in DB, rotated, revocable).

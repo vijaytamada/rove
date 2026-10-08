@@ -3,7 +3,8 @@ import { notFound } from "next/navigation";
 import { ArrowLeft, Clock, MapPin, User } from "lucide-react";
 import { Panel } from "@/components/admin/ui";
 import { BookingStatusChip } from "@/components/booking/BookingStatusChip";
-import { NoShowButton, PickupForm, ReturnForm } from "@/components/desk/DeskForms";
+import { SettlementSummary } from "@/components/booking/SettlementSummary";
+import { NoShowButton, PickupForm, ReturnForm, SettlementActions } from "@/components/desk/DeskForms";
 import { requireRole } from "@/lib/dal";
 import { formatDateTime, formatMoney, formatRange } from "@/lib/format";
 import { isUuid } from "@/lib/ids";
@@ -18,6 +19,8 @@ const DONE: Record<string, string> = {
   pickup: "The scooter has been handed over. The ride has started.",
   return: "The scooter has been returned.",
   "no-show": "Marked as a no-show. The deposit is on its way back to the customer.",
+  collected: "Payment recorded. The customer can book again.",
+  refunded: "The refund went through.",
 };
 
 const SEVERITY: Record<DamageView["severity"], string> = { MINOR: "Minor", MODERATE: "Moderate", MAJOR: "Major" };
@@ -27,6 +30,8 @@ function idleMessage(b: StaffBookingView): string {
   switch (b.status) {
     case "RETURNED":
     case "SETTLED":
+      if (b.settlement?.status === "OUTSTANDING") return `The scooter is back. The customer still owes ${formatMoney(b.settlement.outstandingAmount)}.`;
+      if (b.settlement?.status === "REFUND_PENDING") return "The scooter is back. The deposit refund has not gone through yet.";
       return "This ride is complete. The scooter is back.";
     case "NO_SHOW":
       return "This booking was marked as a no-show.";
@@ -81,7 +86,7 @@ export default async function DeskBooking({
             {b.vehicle.model.brand} {b.vehicle.model.name} · {b.vehicle.code}
           </p>
         </div>
-        <BookingStatusChip status={b.status} />
+        <BookingStatusChip status={b.status} owing={b.settlement?.status === "OUTSTANDING"} />
       </div>
 
       {query.done && DONE[query.done] && (
@@ -117,6 +122,13 @@ export default async function DeskBooking({
           )}
           {!pickup.allowed && b.status === "CONFIRMED" && !idle && <p className="text-sm text-ink-muted">{pickup.reason}</p>}
           {!ret.allowed && b.status === "IN_RIDE" && <p className="text-sm text-ink-muted">{ret.reason}</p>}
+
+          {b.settlement && (
+            <Panel title="Final bill">
+              <SettlementSummary settlement={b.settlement} audience="staff" />
+              <SettlementActions settlement={b.settlement} bookingId={b.id} />
+            </Panel>
+          )}
 
           {rental && (
             <Panel title="Ride">

@@ -16,13 +16,16 @@ ChipTone _tone(BookingStatus s) => switch (s) {
       BookingStatus.noShow => ChipTone.danger,
     };
 
+/// `owing`: the ride is settled but the customer still has money to pay, shown as "Payment due".
 class BookingStatusChip extends StatelessWidget {
-  const BookingStatusChip(this.status, {super.key});
+  const BookingStatusChip(this.status, {super.key, this.owing = false});
 
   final BookingStatus status;
+  final bool owing;
 
   @override
-  Widget build(BuildContext context) => StatusChip(status.label, tone: _tone(status));
+  Widget build(BuildContext context) =>
+      owing ? const StatusChip('Payment due', tone: ChipTone.danger) : StatusChip(status.label, tone: _tone(status));
 }
 
 class BookingCard extends StatelessWidget {
@@ -56,7 +59,7 @@ class BookingCard extends StatelessWidget {
                       ],
                     ),
                   ),
-                  BookingStatusChip(b.status),
+                  BookingStatusChip(b.status, owing: b.owing),
                 ],
               ),
               const SizedBox(height: 12),
@@ -74,10 +77,10 @@ class BookingCard extends StatelessWidget {
               Row(
                 children: [
                   Expanded(
-                    child: Text(formatMoney(b.totalAmount),
-                        style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+                    child: Text(b.owing ? 'Owe ${formatMoney(b.settlement!.outstandingAmount)}' : formatMoney(b.totalAmount),
+                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: b.owing ? const Color(0xFFB91C1C) : null)),
                   ),
-                  Text(b.status == BookingStatus.pendingPayment ? 'Pay now' : 'View',
+                  Text(b.status == BookingStatus.pendingPayment || b.owing ? 'Pay now' : 'View',
                       style: const TextStyle(fontWeight: FontWeight.w500)),
                   const Icon(Icons.chevron_right, size: 18),
                 ],

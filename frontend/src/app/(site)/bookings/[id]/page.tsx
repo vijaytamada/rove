@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { ArrowLeft, Clock, MapPin } from "lucide-react";
 import { BookingStatusChip } from "@/components/booking/BookingStatusChip";
 import { PriceBreakdown } from "@/components/booking/PriceBreakdown";
+import { SettlementSummary } from "@/components/booking/SettlementSummary";
 import { requireRole } from "@/lib/dal";
 import { formatDateTime, formatMoney, formatRange } from "@/lib/format";
 import { isUuid } from "@/lib/ids";
@@ -28,6 +29,7 @@ function timeline(b: BookingView): Step[] {
   if (b.status === "NO_SHOW") steps.push({ label: "Marked as a no-show", at: null });
   if (b.cancelledAt) steps.push({ label: "Cancelled", at: b.cancelledAt });
   if (b.refundedAmount > 0) steps.push({ label: `${formatMoney(b.refundedAmount)} refunded`, at: null });
+  if (b.settlement?.clearedAt) steps.push({ label: `${formatMoney(b.settlement.outstandingAmount)} paid`, at: b.settlement.clearedAt });
   return steps;
 }
 
@@ -36,7 +38,7 @@ export default async function BookingPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ confirmed?: string; cancelled?: string }>;
+  searchParams: Promise<{ confirmed?: string; cancelled?: string; paid?: string }>;
 }) {
   const { id } = await params;
   if (!isUuid(id)) notFound();
@@ -48,6 +50,8 @@ export default async function BookingPage({
   const { model } = booking.vehicle;
   const justConfirmed = query.confirmed === "1" && booking.status === "CONFIRMED";
   const justCancelled = query.cancelled === "1" && booking.status === "CANCELLED";
+  const settlement = booking.settlement;
+  const justPaid = query.paid === "1" && settlement?.status === "CLEARED";
 
   return (
     <div className="mx-auto max-w-3xl">
@@ -59,7 +63,7 @@ export default async function BookingPage({
         <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">
           {model.brand} {model.name}
         </h1>
-        <BookingStatusChip status={booking.status} />
+        <BookingStatusChip status={booking.status} owing={settlement?.status === "OUTSTANDING"} />
       </div>
       <p className="mt-1 text-ink-muted">
         Scooter {booking.vehicle.code} · Booking {booking.code}
@@ -77,17 +81,29 @@ export default async function BookingPage({
         </p>
       )}
 
+      {justPaid && (
+        <p role="status" className="mt-6 rounded-control bg-accent-soft px-4 py-3 text-sm text-accent-ink">
+          Paid. Thank you. You can book again.
+        </p>
+      )}
+      {settlement?.status === "OUTSTANDING" && (
+        <p role="alert" className="mt-6 rounded-control bg-red-50 px-4 py-3 text-sm text-red-700">
+          You owe {formatMoney(settlement.outstandingAmount)} for this ride. Pay it to book again.
+        </p>
+      )}
+
       {booking.status === "IN_RIDE" && (
         <p role="status" className="mt-6 rounded-control bg-accent-soft px-4 py-3 text-sm text-accent-ink">
           Your ride is in progress. Bring the scooter back to any station in {booking.station.cityName} by{" "}
           {formatDateTime(booking.endAt, tz)} to avoid late charges.
         </p>
       )}
-      {booking.status === "RETURNED" && booking.rental && (
+      {(booking.status === "RETURNED" || booking.status === "SETTLED") && booking.rental && (
         <p role="status" className="mt-6 rounded-control bg-canvas px-4 py-3 text-sm text-ink-muted">
           Returned{booking.rental.returnStationName ? ` to ${booking.rental.returnStationName}` : ""}
-          {booking.rental.distanceKm !== null ? ` after ${booking.rental.distanceKm} km` : ""}. Your deposit is held until the return is
-          checked and settled.
+          {booking.rental.distanceKm !== null ? ` after ${booking.rental.distanceKm} km` : ""}.
+          {settlement?.status === "REFUND_PENDING" && " Your refund is on its way."}
+          {settlement?.status === "REFUNDED" && ` ${formatMoney(settlement.refundAmount)} of your deposit was refunded.`}
         </p>
       )}
       {booking.status === "NO_SHOW" && (
@@ -143,6 +159,13 @@ export default async function BookingPage({
           />
         </section>
 
+        {settlement && (
+          <section className="rounded-card border border-line bg-surface p-5 sm:p-6 md:col-span-2">
+            <h2 className="mb-4 text-base font-semibold tracking-tight">Final bill</h2>
+            <SettlementSummary settlement={settlement} audience="customer" />
+          </section>
+        )}
+
         <section className="rounded-card border border-line bg-surface p-5 sm:p-6">
           <h2 className="text-base font-semibold tracking-tight">Rates you agreed to</h2>
           <ul className="mt-4 space-y-2 text-sm text-ink-muted">
@@ -171,8 +194,16 @@ export default async function BookingPage({
         </section>
       </div>
 
-      {(booking.status === "PENDING_PAYMENT" || booking.cancellation.allowed) && (
+      {(booking.status === "PENDING_PAYMENT" || booking.cancellation.allowed || settlement?.payable) && (
         <div className="mt-8 grid gap-3 sm:max-w-md">
+          {settlement?.payable && (
+            <Link
+              href={`/bookings/${booking.id}/settle`}
+              className="flex h-12 items-center justify-center rounded-full bg-ink text-base font-medium text-white transition-colors hover:bg-ink/90"
+            >
+              Pay {formatMoney(settlement.outstandingAmount)}
+            </Link>
+          )}
           {booking.status === "PENDING_PAYMENT" && (
             <Link
               href={`/bookings/${booking.id}/pay`}

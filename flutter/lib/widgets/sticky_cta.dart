@@ -13,6 +13,7 @@ class StickyCta extends StatelessWidget {
     required this.onPressed,
     this.loading = false,
     this.banner,
+    this.amountLabel = 'Total',
   });
 
   /// Null while the price is not known yet (shows a dash).
@@ -20,6 +21,9 @@ class StickyCta extends StatelessWidget {
   final String label;
   final VoidCallback? onPressed;
   final bool loading;
+
+  /// Small caption above the amount.
+  final String amountLabel;
 
   /// Optional message above the bar (an error, for example).
   final Widget? banner;
@@ -45,7 +49,7 @@ class StickyCta extends StatelessWidget {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          const Text('Total', style: TextStyle(color: Tokens.inkMuted, fontSize: 12)),
+                          Text(amountLabel, style: const TextStyle(color: Tokens.inkMuted, fontSize: 12)),
                           Text(totalAmount == null ? '–' : formatMoney(totalAmount!),
                               style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w600)),
                         ],

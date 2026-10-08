@@ -14,6 +14,7 @@ import '../widgets/price_breakdown.dart';
 import '../widgets/status_chip.dart';
 import '../widgets/sticky_cta.dart';
 import 'pay_screen.dart';
+import 'settle_screen.dart';
 import 'verify_screen.dart';
 
 const _durations = [1, 2, 3, 4, 6, 8, 12, 24];
@@ -48,6 +49,7 @@ class _BookScreenState extends State<BookScreen> {
 
   bool _submitting = false;
   String? _submitError;
+  String? _submitNotice;
 
   @override
   void didChangeDependencies() {
@@ -150,6 +152,7 @@ class _BookScreenState extends State<BookScreen> {
     setState(() {
       _submitting = true;
       _submitError = null;
+      _submitNotice = null;
     });
     if (!await _ensureVerified()) {
       if (mounted) setState(() => _submitting = false);
@@ -157,6 +160,19 @@ class _BookScreenState extends State<BookScreen> {
     }
     final (booking, error) = await _api.create(vehicleId: widget.vehicleId, hours: _hours, startAt: _startAt);
     if (!mounted) return;
+    if (error?.code == 'OUTSTANDING_BALANCE') {
+      // Money is owed for an earlier ride: pay it first, then carry on with this booking.
+      if (await _payWhatIsOwed(error!)) {
+        if (mounted) {
+          setState(() {
+            _submitting = false;
+            _submitNotice = 'Paid. Tap Continue to book your scooter.';
+          });
+        }
+        return;
+      }
+      if (!mounted) return;
+    }
     if (error != null || booking == null) {
       setState(() {
         _submitting = false;
@@ -166,6 +182,16 @@ class _BookScreenState extends State<BookScreen> {
     }
     // Replace this screen so "back" from checkout never returns here to book the same scooter twice.
     await Navigator.of(context).pushReplacement(MaterialPageRoute<void>(builder: (_) => PayScreen(booking: booking)));
+  }
+
+  /// Opens the pay-what-you-owe screen for the earlier ride named in the error. True once it is paid.
+  Future<bool> _payWhatIsOwed(ApiError error) async {
+    final owedId = error.info?['bookingId'];
+    if (owedId is! String) return false;
+    final (owed, _) = await _api.get(owedId);
+    if (!mounted || owed == null || owed.settlement == null) return false;
+    final paid = await Navigator.of(context).push<bool>(MaterialPageRoute<bool>(builder: (_) => SettleScreen(booking: owed)));
+    return paid == true;
   }
 
   @override
@@ -185,7 +211,9 @@ class _BookScreenState extends State<BookScreen> {
               label: 'Continue',
               loading: _submitting,
               onPressed: _quote == null ? null : _continue,
-              banner: _submitError == null ? null : FormBanner.error(_submitError!),
+              banner: _submitError != null
+                  ? FormBanner.error(_submitError!)
+                  : (_submitNotice == null ? null : FormBanner.success(_submitNotice!)),
             )
           : null,
     );

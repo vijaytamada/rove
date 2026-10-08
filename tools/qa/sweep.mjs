@@ -26,7 +26,7 @@ const spec = (await j("GET", "/api/docs-json")).data;
 const uuid = "00000000-0000-4000-8000-000000000000";
 const publicPaths = new Set(["/api/v1/health", "/api/v1/auth/phone/request", "/api/v1/auth/phone/verify", "/api/v1/auth/phone/signup", "/api/v1/auth/login", "/api/v1/auth/refresh", "/api/v1/auth/logout", "/api/v1/cities", "/api/v1/cities/{cityId}/stations", "/api/v1/stations/{id}", "/api/v1/stations/{stationId}/vehicles", "/api/v1/vehicles/{id}", "/api/v1/bookings/quote"]);
 // Customer-only routes: a customer is allowed in (checked below that staff are not).
-const customerOnly = new Set(["/api/v1/kyc/status", "/api/v1/kyc/start", "/api/v1/bookings", "/api/v1/bookings/{id}", "/api/v1/bookings/{id}/pay", "/api/v1/bookings/{id}/cancel"]);
+const customerOnly = new Set(["/api/v1/kyc/status", "/api/v1/kyc/start", "/api/v1/bookings", "/api/v1/bookings/{id}", "/api/v1/bookings/{id}/pay", "/api/v1/bookings/{id}/cancel", "/api/v1/bookings/{id}/settlement", "/api/v1/bookings/{id}/settlement/pay"]);
 let routeCount = 0;
 for (const [path, methods] of Object.entries(spec.paths)) {
   for (const method of Object.keys(methods)) {

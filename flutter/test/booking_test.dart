@@ -50,6 +50,33 @@ Map<String, dynamic> _scooter({bool pricing = true}) => {
       'pricing': pricing ? _pricing : null,
     };
 
+/// The final bill of a ride. Defaults: 2 extra km (Rs 12) and 1 late hour (Rs 99) taken from a Rs 1000 deposit.
+Map<String, dynamic> settlementJson({
+  String status = 'REFUNDED',
+  int deposit = 100000,
+  List<Map<String, dynamic>>? lines,
+  int refund = 88900,
+  int outstanding = 0,
+}) {
+  final items = lines ??
+      [
+        {'type': 'EXTRA_KM', 'description': '2 extra km (24 km included)', 'quantity': 2, 'unitAmount': 600, 'amount': 1200},
+        {'type': 'LATE_FEE', 'description': '1 hour late', 'quantity': 1, 'unitAmount': 9900, 'amount': 9900},
+      ];
+  return {
+    'id': 'st1',
+    'status': status,
+    'depositHeld': deposit,
+    'totalCharges': items.fold<int>(0, (n, l) => n + (l['amount'] as int)),
+    'refundAmount': refund,
+    'outstandingAmount': outstanding,
+    'lineItems': items,
+    'settledAt': null,
+    'clearedAt': status == 'CLEARED' ? DateTime.now().toUtc().toIso8601String() : null,
+    'payable': status == 'OUTSTANDING',
+  };
+}
+
 Map<String, dynamic> bookingJson({
   String id = 'b1',
   String status = 'PENDING_PAYMENT',
@@ -60,6 +87,7 @@ Map<String, dynamic> bookingJson({
   DateTime? start,
   DateTime? holdExpiresAt,
   Map<String, dynamic>? rental,
+  Map<String, dynamic>? settlement,
 }) {
   final s = start ?? DateTime.now().toUtc().add(const Duration(minutes: 5));
   return {
@@ -86,6 +114,7 @@ Map<String, dynamic> bookingJson({
     'payment': null,
     'refundedAmount': refunded,
     'rental': rental,
+    'settlement': settlement,
     'cancellation': cancellation ?? {'allowed': status == 'PENDING_PAYMENT', 'refundAmount': 0, 'retainedAmount': 0},
   };
 }
@@ -110,6 +139,10 @@ class FakeBackend {
   bool kycVerified = false;
   bool failNextPayment = false;
   bool stationOpen = true;
+  bool failNextSettlementPayment = false;
+  String? owedBookingId;
+  String? lastSettlePayBody;
+  Map<String, String>? lastSettlePayHeaders;
   Map<String, dynamic>? quoteError;
   final bookings = <String, Map<String, dynamic>>{};
   String? lastCreateBody;
@@ -146,6 +179,14 @@ class FakeBackend {
     }
     if (path.endsWith('/bookings') && r.method == 'POST') {
       lastCreateBody = r.body;
+      if (owedBookingId != null) {
+        return json(409, {
+          'statusCode': 409,
+          'code': 'OUTSTANDING_BALANCE',
+          'message': 'You owe ₹500 for your last ride. Pay it to book again.',
+          'details': {'bookingId': owedBookingId, 'amount': 50000},
+        });
+      }
       final b = bookingJson();
       bookings[b['id'] as String] = b;
       return json(201, b);
@@ -153,11 +194,12 @@ class FakeBackend {
     if (path.endsWith('/bookings') && r.method == 'GET') {
       final tab = r.url.queryParameters['tab'];
       final wanted = switch (tab) {
-        'active' => ['PENDING_PAYMENT', 'IN_RIDE'],
+        'active' => ['PENDING_PAYMENT', 'IN_RIDE', 'OWING'],
         'upcoming' => ['CONFIRMED'],
-        _ => ['CANCELLED', 'EXPIRED', 'RETURNED', 'NO_SHOW'],
+        _ => ['CANCELLED', 'EXPIRED', 'RETURNED', 'SETTLED', 'NO_SHOW'],
       };
-      final items = bookings.values.where((b) => wanted.contains(b['status'])).toList();
+      bool owing(Map<String, dynamic> b) => (b['settlement'] as Map?)?['status'] == 'OUTSTANDING';
+      final items = bookings.values.where((b) => wanted.contains(owing(b) ? 'OWING' : b['status'])).toList();
       return json(200, {'items': items, 'total': items.length, 'page': 1, 'limit': 50});
     }
     final pay = RegExp(r'/bookings/([^/]+)/pay$').firstMatch(path);
@@ -176,6 +218,23 @@ class FakeBackend {
       );
       bookings[b['id'] as String] = b;
       return json(200, b);
+    }
+    final settle = RegExp(r'/bookings/([^/]+)/settlement/pay$').firstMatch(path);
+    if (settle != null) {
+      lastSettlePayBody = r.body;
+      lastSettlePayHeaders = r.headers;
+      if (failNextSettlementPayment) {
+        failNextSettlementPayment = false;
+        return apiError(402, 'PAYMENT_FAILED', 'Payment was declined (simulated).');
+      }
+      final id = settle.group(1)!;
+      final old = bookings[id]!;
+      final cleared = settlementJson(status: 'CLEARED', lines: [
+        {'type': 'DAMAGE', 'description': 'Stolen battery', 'quantity': 1, 'unitAmount': 150000, 'amount': 150000},
+      ], refund: 0, outstanding: 50000);
+      bookings[id] = {...old, 'settlement': cleared};
+      if (owedBookingId == id) owedBookingId = null;
+      return json(200, cleared);
     }
     final cancel = RegExp(r'/bookings/([^/]+)/cancel$').firstMatch(path);
     if (cancel != null) {
@@ -502,6 +561,156 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.textContaining("You didn't pick up the scooter"), findsOneWidget);
     expect(find.text('Marked as a no-show'), findsOneWidget);
+  });
+
+  Map<String, dynamic> noCancel() => {'allowed': false, 'refundAmount': 0, 'retainedAmount': 0};
+  Map<String, dynamic> returnedRental() {
+    final t = DateTime.now().toUtc().subtract(const Duration(hours: 1)).toIso8601String();
+    return {'startedAt': t, 'endedAt': t, 'distanceKm': 26.0, 'returnStationName': 'MG Road'};
+  }
+
+  Map<String, dynamic> owingBooking() => bookingJson(
+        id: 'o1',
+        status: 'SETTLED',
+        cancellation: noCancel(),
+        rental: returnedRental(),
+        settlement: settlementJson(
+          status: 'OUTSTANDING',
+          lines: [
+            {'type': 'DAMAGE', 'description': 'Stolen battery', 'quantity': 1, 'unitAmount': 150000, 'amount': 150000},
+          ],
+          refund: 0,
+          outstanding: 50000,
+        ),
+      );
+
+  testWidgets('a settled ride shows the final bill: each charge and what was refunded', (tester) async {
+    final backend = FakeBackend()..kycVerified = true;
+    backend.bookings['s1'] = bookingJson(
+      id: 's1',
+      status: 'SETTLED',
+      refunded: 88900,
+      cancellation: noCancel(),
+      rental: returnedRental(),
+      settlement: settlementJson(),
+    );
+    final env = TestEnv(backend.handle);
+    await signInAndOpen(tester, env);
+    await openTab(tester, 'Bookings');
+    await tester.tap(find.text('Past'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Settled'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Final bill'), findsOneWidget);
+    expect(find.text('Deposit paid'), findsOneWidget);
+    expect(find.text('Extra distance'), findsOneWidget);
+    expect(find.textContaining('2 extra km (24 km included)'), findsOneWidget);
+    expect(find.text('− ₹12'), findsOneWidget);
+    expect(find.text('Late return'), findsOneWidget);
+    expect(find.text('− ₹99'), findsOneWidget);
+    expect(find.text('Refunded to you'), findsWidgets);
+    expect(find.text('₹889'), findsWidgets);
+    expect(find.textContaining('₹889 of your deposit was refunded.'), findsOneWidget);
+    expect(find.textContaining('Pay ₹'), findsNothing);
+  });
+
+  testWidgets('a refund that has not gone through yet says it is on its way', (tester) async {
+    final backend = FakeBackend()..kycVerified = true;
+    backend.bookings['s1'] = bookingJson(
+      id: 's1',
+      status: 'RETURNED',
+      cancellation: noCancel(),
+      rental: returnedRental(),
+      settlement: settlementJson(status: 'REFUND_PENDING'),
+    );
+    final env = TestEnv(backend.handle);
+    await signInAndOpen(tester, env);
+    await openTab(tester, 'Bookings');
+    await tester.tap(find.text('Past'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Returned'));
+    await tester.pumpAndSettle();
+    expect(find.text('Your refund is on its way'), findsOneWidget);
+    expect(find.textContaining('Your refund is on its way.'), findsOneWidget);
+  });
+
+  testWidgets('money owed shows as payment due, can be paid, and a decline can be retried', (tester) async {
+    final backend = FakeBackend()
+      ..kycVerified = true
+      ..failNextSettlementPayment = true;
+    backend.bookings['o1'] = owingBooking();
+    final env = TestEnv(backend.handle);
+    await signInAndOpen(tester, env);
+    await openTab(tester, 'Bookings');
+
+    // It sits under Active, marked as payment due, with the amount.
+    expect(find.text('Payment due'), findsOneWidget);
+    expect(find.text('Owe ₹500'), findsOneWidget);
+    expect(find.text('Pay now'), findsOneWidget);
+    await tester.tap(find.text('Payment due'));
+    await tester.pumpAndSettle();
+    expect(find.text('You owe ₹500 for this ride. Pay it to book again.'), findsOneWidget);
+    expect(find.text('Final bill'), findsOneWidget);
+    expect(find.text('Damage'), findsOneWidget);
+
+    await tester.tap(find.widgetWithText(FilledButton, 'Pay ₹500'));
+    await tester.pumpAndSettle();
+    expect(find.text('Pay what you owe'), findsOneWidget);
+    expect(find.text('You owe'), findsNWidgets(2)); // the bill and the bottom bar
+
+    await tester.tap(find.widgetWithText(FilledButton, 'Pay ₹500'));
+    await tester.pumpAndSettle();
+    expect(find.text('Payment was declined (simulated).'), findsOneWidget);
+    expect(find.text('Pay what you owe'), findsOneWidget);
+
+    await tester.tap(find.widgetWithText(FilledButton, 'Pay ₹500'));
+    await tester.pumpAndSettle();
+    expect(backend.lastSettlePayHeaders?['Idempotency-Key'], isNotNull);
+    expect(find.text('Paid. Thank you. You can book again.'), findsOneWidget);
+    expect(find.text('You paid'), findsOneWidget);
+    expect(find.text('Payment due'), findsNothing);
+    expect(find.text('₹500 paid'), findsOneWidget);
+  });
+
+  testWidgets('the demo checkbox asks for a declined payment of what is owed', (tester) async {
+    final backend = FakeBackend()..kycVerified = true;
+    backend.bookings['o1'] = owingBooking();
+    final env = TestEnv(backend.handle);
+    await signInAndOpen(tester, env);
+    await openTab(tester, 'Bookings');
+    await tester.tap(find.text('Payment due'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(FilledButton, 'Pay ₹500'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byType(Checkbox));
+    await tester.tap(find.widgetWithText(FilledButton, 'Pay ₹500'));
+    await tester.pumpAndSettle();
+    expect(backend.lastSettlePayBody, contains('"simulate":"FAIL"'));
+  });
+
+  testWidgets('booking while money is owed sends the customer to pay it first, then continues', (tester) async {
+    final backend = FakeBackend()
+      ..kycVerified = true
+      ..owedBookingId = 'o1';
+    backend.bookings['o1'] = owingBooking();
+    final env = TestEnv(backend.handle);
+    await signInAndOpen(tester, env);
+    await openBookScreen(tester);
+
+    await tester.tap(find.widgetWithText(FilledButton, 'Continue'));
+    await tester.pumpAndSettle();
+    expect(find.text('Pay what you owe'), findsOneWidget);
+
+    await tester.tap(find.widgetWithText(FilledButton, 'Pay ₹500'));
+    await tester.pumpAndSettle();
+    // Back on the booking screen, with the choices kept and a note.
+    expect(find.text('Paid. Tap Continue to book your scooter.'), findsOneWidget);
+    expect(find.text('Pay to confirm'), findsNothing);
+
+    await tester.tap(find.widgetWithText(FilledButton, 'Continue'));
+    await tester.pumpAndSettle();
+    expect(find.text('Pay to confirm'), findsOneWidget);
   });
 
   testWidgets('a late cancellation says the rental is kept', (tester) async {

@@ -125,6 +125,11 @@ frontend/src/
 - The booking page shows a green banner after each action, the rental readings and damage records once there is a ride, and a **Refunded** row when money has gone back.
 - Customers see the ride states on both clients: *On a ride*, *Returned* (with the distance and return station) and *No-show*. Web: `/bookings/[id]`; app: booking detail. The desk itself is website-only.
 
+### Final bill and settlements (2026-10-08)
+- **Final bill** card on the booking page (website `<SettlementSummary>`, app `SettlementSummary`): deposit paid, each charge as its own line (extra distance, late return, damage, with quantity x rate when more than one), then one result line: *Refunded to you*, *Your refund is on its way*, *You owe*, *You paid* or *Nothing to refund*. Amounts come from the backend; clients never calculate money.
+- **Money owed:** a red banner on the booking, the status chip reads **Payment due**, the card in the list says *Owe ₹X* and *Pay now*, and it sits under **Active**. **Pay what you owe** screen (`/bookings/[id]/settle`, app `SettleScreen`): the bill, the demo note and the demo "make this payment fail" box, one Pay button (bottom bar caption *You owe*). Trying to book while owing sends the customer there first (the website returns to the booking page with the choices kept; the app returns to the booking screen with a note).
+- **Station console:** the desk booking page has a **Final bill** panel with *Payment received* (owed) or *Send the refund again* (refund not through); **Settlements** in the console navigation lists *Owed*, *Refunds waiting* and *Paid* for the stations a staff member runs.
+
 ### Profile (2026-10-04)
 - Details are **read-only by default**: a label, the value and a pencil button. Nothing looks like an input until the pencil is pressed.
 - **Name:** the pencil turns the row into a text box with Save and Cancel (inline, no popup).

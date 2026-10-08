@@ -184,6 +184,8 @@ export interface BookingView {
   station: StationSummary;
   payment: { status: "PENDING" | "SUCCEEDED" | "FAILED"; chargeAmount: number; paidAt: string | null } | null;
   refundedAmount: number;
+  /** The final bill, once the scooter has been returned. */
+  settlement: SettlementView | null;
   /** What cancelling right now would do. */
   cancellation: { allowed: boolean; refundAmount: number; retainedAmount: number };
   /** The ride itself, once the scooter was handed over. */
@@ -214,7 +216,7 @@ export interface DamageView {
   phase: "PICKUP" | "RETURN";
   description: string;
   severity: "MINOR" | "MODERATE" | "MAJOR";
-  /** Flat charge in paise, settled in Phase 6. */
+  /** Flat charge in paise, taken from the deposit on the final bill. */
   feeAmount: number;
 }
 
@@ -238,6 +240,36 @@ export interface Allowed {
   reason?: string;
 }
 
+export type SettlementStatus = "REFUND_PENDING" | "REFUNDED" | "OUTSTANDING" | "CLEARED" | "NO_ACTION";
+
+/** The final bill of a ride: charges taken from the deposit, then a refund or an amount owed. */
+export interface SettlementView {
+  id: string;
+  status: SettlementStatus;
+  depositHeld: number;
+  totalCharges: number;
+  refundAmount: number;
+  outstandingAmount: number;
+  lineItems: { type: "EXTRA_KM" | "LATE_FEE" | "DAMAGE"; description: string; quantity: number; unitAmount: number; amount: number }[];
+  settledAt: string | null;
+  clearedAt: string | null;
+  payable: boolean;
+}
+
+export interface StaffSettlementView extends SettlementView {
+  booking: {
+    id: string;
+    code: string;
+    status: BookingStatus;
+    customer: { id: string; fullName: string; phone: string | null };
+    vehicleCode: string;
+    stationName: string;
+    timezone: string;
+    returnStationName: string | null;
+    returnedAt: string | null;
+  };
+}
+
 /** A booking as the station sees it. Never contains the pickup PIN. */
 export interface StaffBookingView {
   id: string;
@@ -251,6 +283,8 @@ export interface StaffBookingView {
   depositAmount: number;
   totalAmount: number;
   refundedAmount: number;
+  /** The final bill, once the scooter has been returned. */
+  settlement: SettlementView | null;
   customer: { id: string; fullName: string; phone: string | null };
   vehicle: {
     id: string;

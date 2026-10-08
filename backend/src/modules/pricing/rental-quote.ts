@@ -22,7 +22,7 @@ export interface RentalQuote {
 /**
  * Upfront price for renting `hours` whole hours: the hourly rate times hours, never more than the day rate when
  * the plan has one. The deposit is separate and refundable. Excess-km, late and damage charges are settled at
- * return (Phase 6), not quoted here.
+ * return (see settlement-charges.ts), not quoted here.
  */
 export function quoteRental(plan: PlanRates, hours: number): RentalQuote {
   if (!Number.isInteger(hours) || hours < 1) throw new RangeError('hours must be a whole number of at least 1');

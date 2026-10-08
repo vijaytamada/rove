@@ -39,6 +39,8 @@ const routes = [
   ["/register", { anon: "login", customer: "to:/", employee: "to:/staff", manager: "to:/admin", admin: "to:/admin" }],
   ["/profile", { anon: "login", customer: "ok", employee: "ok", manager: "ok", admin: "ok" }],
   ["/staff", { anon: "staff-login", customer: "to:/", employee: "ok", manager: "ok", admin: "ok" }],
+  ["/staff/settlements", { anon: "staff-login", customer: "to:/", employee: "ok", manager: "ok", admin: "ok" }],
+  ["/staff/settlements?tab=refunds", { anon: "staff-login", customer: "to:/", employee: "ok", manager: "ok", admin: "ok" }],
   ["/staff/fleet", { anon: "staff-login", customer: "to:/", employee: "ok", manager: "ok", admin: "ok" }],
   ["/staff/bookings/00000000-0000-4000-8000-000000000000", { anon: "staff-login", customer: "to:/", employee: "404", manager: "404", admin: "404" }],
   ["/staff/bookings/not-a-uuid", { anon: "staff-login", customer: "to:/", employee: "404", manager: "404", admin: "404" }],
@@ -57,6 +59,8 @@ const routes = [
   ["/bookings", { anon: "login", customer: "ok", employee: "to:/staff", manager: "to:/admin", admin: "to:/admin" }],
   ["/bookings/00000000-0000-4000-8000-000000000000", { anon: "login", customer: "404", employee: "to:/staff", manager: "to:/admin", admin: "to:/admin" }],
   ["/bookings/00000000-0000-4000-8000-000000000000/pay", { anon: "login", customer: "404", employee: "to:/staff", manager: "to:/admin", admin: "to:/admin" }],
+  ["/bookings/00000000-0000-4000-8000-000000000000/settle", { anon: "login", customer: "404", employee: "to:/staff", manager: "to:/admin", admin: "to:/admin" }],
+  ["/bookings/not-a-uuid/settle", { anon: "login", customer: "404", employee: "to:/staff", manager: "to:/admin", admin: "to:/admin" }],
   ["/verify", { anon: "login", customer: "ok", employee: "to:/staff", manager: "to:/admin", admin: "to:/admin" }],
   [`/book/${vehBlr.id}`, { anon: "ok", customer: "ok", employee: "ok", manager: "ok", admin: "ok" }],
   ["/book/not-a-uuid", { anon: "404", customer: "404", employee: "404", manager: "404", admin: "404" }],
@@ -124,5 +128,7 @@ const t17 = await text("/staff", tokens.employee);
 checks.push(["station desk has the three queues and the station heading", /Station desk/.test(t17) && /Pickups/.test(t17) && /On a ride/.test(t17) && /Done/.test(t17)]);
 const t18 = await text("/staff/fleet", tokens.employee);
 checks.push(["employee scooter list shows only own station", /BLR-001|Indiranagar/.test(t18) && !/HITEC/.test(t18) && !/Koramangala/.test(t18)]);
+const t19 = await text("/staff/settlements", tokens.employee);
+checks.push(["settlements page has its three lists", /Settlements/.test(t19) && /Owed/.test(t19) && /Refunds waiting/.test(t19) && /Paid/.test(t19)]);
 for (const [name, ok] of checks) { console.log(`${ok ? "PASS" : "FAIL"}  ${name}`); if (!ok) failures++; }
 process.exit(failures ? 1 : 0);

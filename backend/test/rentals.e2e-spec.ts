@@ -259,13 +259,13 @@ describe('Station desk: pickup, return and no-show (e2e)', () => {
       const booking = await ride(s);
       const res = await doReturn(s.empA.auth, booking.id, returnBody(s.a.id)).expect(200);
 
-      expect(res.body.status).toBe('RETURNED');
+      expect(res.body.status).toBe('SETTLED');
       expect(res.body.rental).toMatchObject({ endOdometerKm: 112.5, distanceKm: 12.5, endBatteryPercent: 70, returnStation: { id: s.a.id } });
       const vehicle = await t.prisma.vehicle.findUniqueOrThrow({ where: { id: s.vehicleIds[0] } });
       expect(vehicle).toMatchObject({ status: 'AVAILABLE', stationId: s.a.id, odometerKm: 112.5, batteryPercent: 70 });
 
       const mine = await t.http().get(api(`/bookings/${booking.id}`)).set(s.customer.auth).expect(200);
-      expect(mine.body.status).toBe('RETURNED');
+      expect(mine.body.status).toBe('SETTLED');
       expect(mine.body.rental).toMatchObject({ distanceKm: 12.5, returnStationName: s.a.name });
       expect(mine.body.pin).toBeNull();
       // The scooter can be booked again straight away.
