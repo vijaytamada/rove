@@ -214,6 +214,7 @@ export async function createTestApp(): Promise<TestApp> {
       if (keys.length) await redis.client.del(...keys);
       // Order matters: refunds -> payments -> bookings -> users; plans and vehicles reference models and cities.
       const ofTestUsers = { user: { id: { in: users.map((u) => u.id) } } };
+      await prisma.settlement.deleteMany({ where: { booking: ofTestUsers } });
       await prisma.rental.deleteMany({ where: { booking: ofTestUsers } });
       await prisma.refund.deleteMany({ where: { payment: { booking: ofTestUsers } } });
       await prisma.payment.deleteMany({ where: { booking: ofTestUsers } });

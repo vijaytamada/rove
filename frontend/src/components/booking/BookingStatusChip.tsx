@@ -23,6 +23,6 @@ export const BOOKING_STATUS_LABEL: Record<BookingStatus, string> = {
   NO_SHOW: "No show",
 };
 
-export const BookingStatusChip = ({ status }: { status: BookingStatus }) => (
-  <StatusChip tone={TONE[status]}>{BOOKING_STATUS_LABEL[status]}</StatusChip>
-);
+/** `owing` = the ride is settled but the customer still has money to pay: shown as "Payment due". */
+export const BookingStatusChip = ({ status, owing = false }: { status: BookingStatus; owing?: boolean }) =>
+  owing ? <StatusChip tone="danger">Payment due</StatusChip> : <StatusChip tone={TONE[status]}>{BOOKING_STATUS_LABEL[status]}</StatusChip>;

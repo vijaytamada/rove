@@ -11,6 +11,7 @@ import type {
   VehicleModel,
 } from '../../generated/prisma/client.js';
 import { toStationSummary, type StationSummary } from '../bookings/booking-views.js';
+import { toSettlementView, type SettlementRow, type SettlementView } from '../settlements/settlement-views.js';
 import { toModelView, type VehicleModelView } from '../vehicles/vehicle-models.service.js';
 import { distanceKm, noShowFrom, pickupOpensAt, type Allowed } from './rental-rules.js';
 
@@ -51,6 +52,8 @@ export interface StaffBookingView {
   totalAmount: number;
   /** Money already returned to the customer (deposit refunds, cancellations, no-shows). */
   refundedAmount: number;
+  /** The final bill, once the scooter has been taken back. */
+  settlement: SettlementView | null;
   customer: { id: string; fullName: string; phone: string | null };
   vehicle: {
     id: string;
@@ -80,6 +83,7 @@ export type RentalRow = Rental & {
 
 export type StaffBookingRow = Booking & {
   payments: (Payment & { refunds: Refund[] })[];
+  settlement: SettlementRow | null;
   user: Pick<User, 'id' | 'fullName' | 'phone'>;
   vehicle: Vehicle & { model: VehicleModel };
   station: Station & { city: City };
@@ -91,6 +95,7 @@ export const STAFF_BOOKING_INCLUDE = {
   vehicle: { include: { model: true } },
   station: { include: { city: true } },
   payments: { include: { refunds: true } },
+  settlement: { include: { lineItems: true } },
   rental: {
     include: {
       returnStation: true,
@@ -145,6 +150,7 @@ export function toStaffBookingView(
       .flatMap((p) => p.refunds)
       .filter((r) => r.status === 'SUCCEEDED')
       .reduce((sum, r) => sum + r.refundAmount, 0),
+    settlement: b.settlement ? toSettlementView(b.settlement) : null,
     customer: { id: b.user.id, fullName: b.user.fullName, phone: b.user.phone },
     vehicle: {
       id: b.vehicle.id,

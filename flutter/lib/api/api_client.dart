@@ -17,13 +17,16 @@ class ApiOk extends ApiResult {
 }
 
 class ApiError extends ApiResult {
-  const ApiError({required this.status, required this.code, required this.message, this.details = const []});
+  const ApiError({required this.status, required this.code, required this.message, this.details = const [], this.info});
 
   /// 0 means the server could not be reached.
   final int status;
   final String code;
   final String message;
   final List<String> details;
+
+  /// Data some errors carry instead of a list of problems (e.g. which booking is owed money).
+  final Map<String, dynamic>? info;
 
   /// Maps validation messages ("email must be an email") onto form fields.
   Map<String, String> fieldErrors(Iterable<String> fields) {
@@ -109,7 +112,8 @@ class ApiClient {
         status: response.statusCode,
         code: json['code'] as String? ?? 'ERROR',
         message: json['message'] as String? ?? 'Something went wrong. Try again.',
-        details: (json['details'] as List?)?.map((e) => '$e').toList() ?? const [],
+        details: json['details'] is List ? (json['details'] as List).map((e) => '$e').toList() : const [],
+        info: json['details'] is Map<String, dynamic> ? json['details'] as Map<String, dynamic> : null,
       );
     } catch (_) {
       return ApiError(status: response.statusCode, code: 'ERROR', message: 'Something went wrong. Try again.');

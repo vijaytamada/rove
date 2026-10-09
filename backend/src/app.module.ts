@@ -12,6 +12,7 @@ import { VehiclesModule } from './modules/vehicles/vehicles.module.js';
 import { KycModule } from './modules/kyc/kyc.module.js';
 import { PricingModule } from './modules/pricing/pricing.module.js';
 import { RentalsModule } from './modules/rentals/rentals.module.js';
+import { SettlementsModule } from './modules/settlements/settlements.module.js';
 import { RbacModule } from './modules/rbac/rbac.module.js';
 import { UsersModule } from './modules/users/users.module.js';
 
@@ -34,6 +35,7 @@ import { UsersModule } from './modules/users/users.module.js';
     KycModule,
     BookingsModule,
     RentalsModule,
+    SettlementsModule,
     HealthModule,
   ],
 })

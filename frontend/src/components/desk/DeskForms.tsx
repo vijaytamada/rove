@@ -1,7 +1,7 @@
 "use client";
 
 import { useActionState, useState } from "react";
-import { noShowAction, pickupAction, returnAction } from "@/app/actions/desk";
+import { collectSettlementAction, noShowAction, pickupAction, retryRefundAction, returnAction } from "@/app/actions/desk";
 import { ActionForm, useFormResult } from "@/components/admin/ActionForm";
 import { Field, FormGrid, SelectField } from "@/components/admin/Fields";
 import { FormMessage } from "@/components/app/FormMessage";
@@ -9,7 +9,7 @@ import { Modal } from "@/components/app/Modal";
 import { SubmitButton } from "@/components/app/SubmitButton";
 import { formatMoney } from "@/lib/format";
 import type { FormState } from "@/lib/form";
-import type { StaffBookingView } from "@/lib/types";
+import type { SettlementView, StaffBookingView } from "@/lib/types";
 
 const SEVERITIES = [
   { value: "MINOR", label: "Minor (scuffs, scratches)" },
@@ -135,5 +135,26 @@ export function NoShowButton({ booking }: { booking: StaffBookingView }) {
         <NoShowConfirm booking={booking} onClose={() => setOpen(false)} />
       </Modal>
     </>
+  );
+}
+
+/** What staff can do about a bill that is not finished: take the money owed, or send the refund again. */
+export function SettlementActions({ settlement, bookingId }: { settlement: SettlementView; bookingId: string }) {
+  const collect = settlement.status === "OUTSTANDING";
+  const [state, action] = useActionState<FormState, FormData>(
+    (collect ? collectSettlementAction : retryRefundAction).bind(null, settlement.id, bookingId),
+    {},
+  );
+  if (!collect && settlement.status !== "REFUND_PENDING") return null;
+  return (
+    <form action={action} className="mt-5 space-y-3 border-t border-line pt-5">
+      <FormMessage state={state} />
+      {collect && (
+        <p className="text-sm text-ink-muted">
+          If the customer pays at the desk, take {formatMoney(settlement.outstandingAmount)} and confirm it here. (Demo: nothing is charged.)
+        </p>
+      )}
+      <SubmitButton>{collect ? `Payment received · ${formatMoney(settlement.outstandingAmount)}` : "Send the refund again"}</SubmitButton>
+    </form>
   );
 }

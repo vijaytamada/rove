@@ -37,6 +37,16 @@ class BookingApi {
         BookingView.fromJson,
       );
 
+  /// Demo payment of what the customer owes after a ride. Every attempt carries its own Idempotency-Key.
+  Future<(SettlementView?, ApiError?)> paySettlement(String bookingId, {bool simulateFailure = false}) => _one(
+        api.post(
+          '/bookings/$bookingId/settlement/pay',
+          body: simulateFailure ? {'simulate': 'FAIL'} : const {},
+          headers: {'Idempotency-Key': _newKey()},
+        ),
+        SettlementView.fromJson,
+      );
+
   Future<(BookingView?, ApiError?)> get(String id) => _one(api.get('/bookings/$id'), BookingView.fromJson);
 
   Future<(BookingView?, ApiError?)> cancel(String id) => _one(api.post('/bookings/$id/cancel'), BookingView.fromJson);

@@ -6,6 +6,7 @@ import { BookingStatusChip } from "./BookingStatusChip";
 
 export function BookingCard({ booking: b }: { booking: BookingView }) {
   const { model } = b.vehicle;
+  const owing = b.settlement?.status === "OUTSTANDING";
   return (
     <Link
       href={`/bookings/${b.id}`}
@@ -18,7 +19,7 @@ export function BookingCard({ booking: b }: { booking: BookingView }) {
           </h3>
           <p className="mt-0.5 text-sm text-ink-muted">{b.code}</p>
         </div>
-        <BookingStatusChip status={b.status} />
+        <BookingStatusChip status={b.status} owing={owing} />
       </div>
       <p className="mt-4 flex items-start gap-2 text-sm text-ink-muted">
         <MapPin size={16} strokeWidth={1.75} className="mt-0.5 shrink-0" aria-hidden="true" />
@@ -26,9 +27,11 @@ export function BookingCard({ booking: b }: { booking: BookingView }) {
       </p>
       <p className="mt-1.5 text-sm">{formatRange(b.startAt, b.endAt, b.station.timezone)}</p>
       <div className="mt-4 flex items-center justify-between">
-        <span className="text-base font-semibold">{formatMoney(b.totalAmount)}</span>
+        <span className={`text-base font-semibold ${owing ? "text-danger" : ""}`}>
+          {owing && b.settlement ? `Owe ${formatMoney(b.settlement.outstandingAmount)}` : formatMoney(b.totalAmount)}
+        </span>
         <span className="flex items-center gap-1 text-sm font-medium text-ink group-hover:underline">
-          {b.status === "PENDING_PAYMENT" ? "Pay now" : "View"}
+          {b.status === "PENDING_PAYMENT" || owing ? "Pay now" : "View"}
           <ChevronRight size={16} aria-hidden="true" />
         </span>
       </div>

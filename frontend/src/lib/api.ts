@@ -23,7 +23,7 @@ export async function getHealth(): Promise<HealthReport | null> {
 
 export type ApiResult<T> =
   | { ok: true; data: T }
-  | { ok: false; status: number; code: string; message: string; details?: string[] };
+  | { ok: false; status: number; code: string; message: string; details?: string[]; info?: Record<string, unknown> };
 
 /** Server-side call to the backend API. Never throws; network failures become `NETWORK_ERROR`. */
 export async function apiRequest<T = void>(
@@ -54,7 +54,7 @@ export async function apiRequest<T = void>(
     const err = (await res.json().catch(() => ({}))) as {
       code?: string;
       message?: string;
-      details?: string[];
+      details?: string[] | Record<string, unknown>;
     };
     return {
       ok: false,
@@ -62,6 +62,8 @@ export async function apiRequest<T = void>(
       code: err.code ?? "ERROR",
       message: err.message ?? "Something went wrong. Try again.",
       details: Array.isArray(err.details) ? err.details : undefined,
+      // Some errors carry data instead of a list of problems (e.g. which booking is owed money).
+      info: err.details && !Array.isArray(err.details) && typeof err.details === "object" ? err.details : undefined,
     };
   } catch {
     return {

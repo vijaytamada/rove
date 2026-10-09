@@ -1,5 +1,5 @@
 import { timingSafeEqual } from 'node:crypto';
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { AppException } from '../../common/app-exception.js';
 import type { AuthUser } from '../../common/auth.decorators.js';
@@ -12,12 +12,14 @@ import { liveBookingOverlap } from '../bookings/booking-availability.js';
 import { derivePin, normalizeBookingCode } from '../bookings/booking-codes.js';
 import { PaymentsService } from '../payments/payments.service.js';
 import { ScopeService } from '../rbac/scope.service.js';
+import { SettlementsService } from '../settlements/settlements.service.js';
 import type { ListStationBookingsQuery, PickupDto, ReturnDto } from './dto/rental.dto.js';
 import {
   RENTAL_RULES,
   canMarkNoShow,
   canPickUp,
   canReturn,
+  distanceKm,
   vehicleStatusAfterReturn,
 } from './rental-rules.js';
 import { STAFF_BOOKING_INCLUDE, toStaffBookingView, type StaffBookingRow, type StaffBookingView } from './rental-views.js';
@@ -37,6 +39,7 @@ interface Access {
 /** Hand a scooter over, take it back, and handle customers who never turn up. Station staff, managers and admins only. */
 @Injectable()
 export class RentalsService {
+  private readonly logger = new Logger(RentalsService.name);
   private readonly pinSecret: string;
 
   constructor(
@@ -44,6 +47,7 @@ export class RentalsService {
     @Inject(RedisService) private readonly redis: RedisService,
     @Inject(ScopeService) private readonly scopes: ScopeService,
     @Inject(PaymentsService) private readonly payments: PaymentsService,
+    @Inject(SettlementsService) private readonly settlements: SettlementsService,
     @Inject(ConfigService) config: ConfigService<Env, true>,
   ) {
     this.pinSecret = config.get('JWT_ACCESS_SECRET', { infer: true });
@@ -216,7 +220,7 @@ export class RentalsService {
       throw new AppException(409, 'RETURN_CITY_MISMATCH', `This scooter must come back to a station in ${row.station.city.name}.`);
     }
 
-    await this.prisma.$transaction(async (tx) => {
+    const bill = await this.prisma.$transaction(async (tx) => {
       await tx.$queryRaw`SELECT id FROM "Booking" WHERE id = ${id}::uuid FOR UPDATE`;
       const b = await tx.booking.findUniqueOrThrow({ where: { id }, include: { rental: true } });
       if (b.status !== 'IN_RIDE' || !b.rental) {
@@ -274,7 +278,28 @@ export class RentalsService {
           batteryPercent: dto.endBatteryPercent,
         },
       });
+
+      // The final bill is made in the same transaction, so a ride is never returned without one.
+      return this.settlements.createInTx(tx, {
+        bookingId: id,
+        hours: b.hours,
+        bookedEndAt: b.endAt,
+        returnedAt: now,
+        distanceKm: distanceKm(rental.startOdometerKm, dto.endOdometerKm),
+        pricingSnapshot: b.pricingSnapshot,
+        damages: damages.map((d) => ({ description: d.description, feeAmount: d.feeAmount ?? 0 })),
+      });
     });
+
+    // The refund talks to the gateway, so it happens after the return is saved. If it fails the settlement stays
+    // REFUND_PENDING and staff can retry from the settlements list.
+    if (bill.needsRefund) {
+      try {
+        await this.settlements.finishRefund(bill.settlementId);
+      } catch (e) {
+        this.logger.error(`Deposit refund for settlement ${bill.settlementId} failed: ${e instanceof Error ? e.message : String(e)}`);
+      }
+    }
     return this.get(user, id, now);
   }
 

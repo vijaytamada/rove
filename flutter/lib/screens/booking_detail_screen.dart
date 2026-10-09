@@ -11,7 +11,9 @@ import '../widgets/form_banner.dart';
 import '../widgets/load_states.dart';
 import '../widgets/price_breakdown.dart';
 import '../widgets/primary_button.dart';
+import '../widgets/settlement_summary.dart';
 import 'pay_screen.dart';
+import 'settle_screen.dart';
 
 /// One booking: pickup code and PIN, where and when, the price, a timeline and (when allowed) cancel.
 class BookingDetailScreen extends StatefulWidget {
@@ -34,6 +36,7 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
   bool _loading = false;
   bool _started = false;
   bool _justCancelled = false;
+  bool _justPaid = false;
 
   @override
   void didChangeDependencies() {
@@ -81,6 +84,13 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
     if (mounted) _load(showSpinner: false);
   }
 
+  Future<void> _settle() async {
+    final paid = await Navigator.of(context).push<bool>(MaterialPageRoute<bool>(builder: (_) => SettleScreen(booking: _booking!)));
+    if (!mounted) return;
+    if (paid == true) setState(() => _justPaid = true);
+    await _load(showSpinner: false);
+  }
+
   @override
   Widget build(BuildContext context) {
     final b = _booking;
@@ -98,6 +108,8 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
     final tz = b.station.timezone;
     final confirmed = widget.justConfirmed && b.status == BookingStatus.confirmed;
     final cancelled = _justCancelled && b.status == BookingStatus.cancelled;
+    final settlement = b.settlement;
+    final paid = _justPaid && settlement?.status == SettlementStatus.cleared;
     return ListView(
       physics: const AlwaysScrollableScrollPhysics(),
       padding: const EdgeInsets.fromLTRB(Tokens.gutter, 4, Tokens.gutter, 32),
@@ -107,7 +119,7 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
             Expanded(
               child: Text('Scooter ${b.vehicleCode} · Booking ${b.code}', style: const TextStyle(color: Tokens.inkMuted)),
             ),
-            BookingStatusChip(b.status),
+            BookingStatusChip(b.status, owing: b.owing),
           ],
         ),
         if (confirmed) ...[
@@ -119,15 +131,23 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
           FormBanner.success(
               'Booking cancelled.${b.refundedAmount > 0 ? ' ${formatMoney(b.refundedAmount)} is on its way back to you.' : ''}'),
         ],
+        if (paid) ...[
+          const SizedBox(height: 16),
+          const FormBanner.success('Paid. Thank you. You can book again.'),
+        ],
+        if (b.owing) ...[
+          const SizedBox(height: 16),
+          FormBanner.error('You owe ${formatMoney(settlement!.outstandingAmount)} for this ride. Pay it to book again.'),
+        ],
         if (b.status == BookingStatus.inRide) ...[
           const SizedBox(height: 16),
           FormBanner.success(
               'Your ride is in progress. Bring the scooter back to any station in ${b.station.cityName} by ${formatDateTime(b.endAt, tz)} to avoid late charges.'),
         ],
-        if (b.status == BookingStatus.returned && b.rental != null) ...[
+        if ((b.status == BookingStatus.returned || b.status == BookingStatus.settled) && b.rental != null) ...[
           const SizedBox(height: 16),
           FormBanner.notice(
-              'Returned${b.rental!.returnStationName == null ? '' : ' to ${b.rental!.returnStationName}'}${b.rental!.distanceKm == null ? '' : ' after ${b.rental!.distanceKm} km'}. Your deposit is held until the return is checked and settled.'),
+              'Returned${b.rental!.returnStationName == null ? '' : ' to ${b.rental!.returnStationName}'}${b.rental!.distanceKm == null ? '' : ' after ${b.rental!.distanceKm} km'}.${settlement?.status == SettlementStatus.refundPending ? ' Your refund is on its way.' : ''}${settlement?.status == SettlementStatus.refunded ? ' ${formatMoney(settlement!.refundAmount)} of your deposit was refunded.' : ''}'),
         ],
         if (b.status == BookingStatus.noShow) ...[
           const SizedBox(height: 16),
@@ -173,6 +193,10 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
             refundedAmount: b.refundedAmount,
           ),
         ),
+        if (settlement != null) ...[
+          const SizedBox(height: 12),
+          _Section('Final bill', SettlementSummary(settlement: settlement)),
+        ],
         const SizedBox(height: 12),
         _Section(
           'Rates you agreed to',
@@ -195,8 +219,9 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
             ],
           ),
         ),
-        if (b.status == BookingStatus.pendingPayment || b.cancellation.allowed) ...[
+        if (b.status == BookingStatus.pendingPayment || b.cancellation.allowed || b.owing) ...[
           const SizedBox(height: 24),
+          if (b.owing) PrimaryButton(label: 'Pay ${formatMoney(settlement!.outstandingAmount)}', onPressed: _settle),
           if (b.status == BookingStatus.pendingPayment) PrimaryButton(label: 'Pay ${formatMoney(b.totalAmount)}', onPressed: _pay),
           if (b.cancellation.allowed) ...[
             const SizedBox(height: 12),
@@ -224,6 +249,7 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
         if (b.status == BookingStatus.expired) ('Hold expired, nothing was charged', null),
         if (b.cancelledAt != null) ('Cancelled', b.cancelledAt),
         if (b.refundedAmount > 0) ('${formatMoney(b.refundedAmount)} refunded', null),
+        if (b.settlement?.clearedAt != null) ('${formatMoney(b.settlement!.outstandingAmount)} paid', b.settlement!.clearedAt),
       ];
 }
 

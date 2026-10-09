@@ -92,15 +92,34 @@ All routes are under `/station/bookings`, for `STATION_EMPLOYEE`, `CITY_MANAGER`
 | `GET /station/bookings?tab&q&stationId&page&limit` | The desk queue. `tab`: `pickups` (paid, waiting, not over; default), `rides` (out now - the whole city sees these, because any station of the city may take the scooter back), `past` (returned or no-show in the last 7 days; also shown at the station that took the scooter back). `q` searches booking code, phone digits or customer name; with `q` and no `tab` it looks everywhere. `stationId` narrows to one station you may use |
 | `GET /station/bookings/:id` | One booking. Other stations' bookings are 404 `BOOKING_NOT_FOUND`, not 403 |
 | `POST /station/bookings/:id/pickup` | Hand the scooter over. Body `{ pin (6 digits), idChecked: true, startOdometerKm, startBatteryPercent, damages?: [{ description, severity }], replacementVehicleId?, swapReason? }`. Allowed from 15 minutes before the start until the booked time is over. `CONFIRMED -> IN_RIDE`, scooter `IN_RIDE` and out of its station slot, a `Rental` is created. A **replacement** (a faulty booked scooter) must be free, at the same station and the same model, and needs `swapReason`; the booking then points at the new scooter. Five wrong PINs lock pickup for that booking for 15 minutes (`PIN_LOCKED`) |
-| `POST /station/bookings/:id/return` | Take the scooter back. Body `{ returnStationId, endOdometerKm, endBatteryPercent, damages?: [{ description, severity, feeAmount? }], sendToMaintenance? }`. The return station must be active, in the **same city** as the booking, have a free slot, and be one you operate. End odometer must not be below the start and at most 2000 km further. `IN_RIDE -> RETURNED`; the scooter moves to the return station and becomes `AVAILABLE`, or `MAINTENANCE` when any damage is MODERATE or MAJOR or `sendToMaintenance` is set; odometer and battery are written to the scooter. No money moves yet (Phase 6) |
+| `POST /station/bookings/:id/return` | Take the scooter back. Body `{ returnStationId, endOdometerKm, endBatteryPercent, damages?: [{ description, severity, feeAmount? }], sendToMaintenance? }`. The return station must be active, in the **same city** as the booking, have a free slot, and be one you operate. End odometer must not be below the start and at most 2000 km further. `IN_RIDE -> RETURNED`; the scooter moves to the return station and becomes `AVAILABLE`, or `MAINTENANCE` when any damage is MODERATE or MAJOR or `sendToMaintenance` is set; odometer and battery are written to the scooter. The final bill is made in the same step (see Phase 6 below) |
 | `POST /station/bookings/:id/no-show` | Allowed once an hour has passed since the start (or the booking has ended, if sooner). `CONFIRMED -> NO_SHOW`; the deposit is refunded through the payment provider (reason `NO_SHOW`), the rental charge is kept, the scooter is bookable again |
 
 Codes added: `PICKUP_NOT_ALLOWED`, `RETURN_NOT_ALLOWED`, `NO_SHOW_NOT_ALLOWED` (all 409, the message says why), `PIN_INVALID`, `PIN_LOCKED`, `SWAP_REASON_REQUIRED`, `REPLACEMENT_NOT_AVAILABLE`, `RETURN_CITY_MISMATCH`, `RETURN_STATION_INACTIVE`, `STATION_FULL`, `ODOMETER_TOO_FAR`, plus the existing `FORBIDDEN_SCOPE` and `BOOKING_NOT_FOUND`.
 
 Customer side: `GET /bookings` and `/bookings/:id` now also carry the ride states (`IN_RIDE`, `RETURNED`, `NO_SHOW`) and a `rental` summary (`startedAt`, `endedAt`, `distanceKm`, `returnStationName`).
 
-### Phase 6 — Settlement
-`GET /bookings/:id/settlement` · `POST /settlements/:id/collect` (mock) · `GET /settlements?status=OUTSTANDING` (staff/manager)
+### Phase 6 - Settlement
+The final bill of a ride, made in the same step that takes the scooter back (`POST /station/bookings/:id/return`). The numbers come from the pure engine `pricing/settlement-charges.ts`, using the rates saved on the booking.
+
+| Route | Who | What it does |
+|---|---|---|
+| `GET /bookings/:id/settlement` | customer (own) | The bill: `status`, `depositHeld`, `totalCharges`, `refundAmount`, `outstandingAmount`, `lineItems` (`EXTRA_KM`, `LATE_FEE`, `DAMAGE`; each with `description`, `quantity`, `unitAmount`, `amount`), `settledAt`, `clearedAt`, `payable`. 404 `SETTLEMENT_NOT_FOUND` until the ride is returned (and for cancelled or no-show bookings) |
+| `POST /bookings/:id/settlement/pay` | customer (own) | Mock payment of the `outstandingAmount`. Optional `Idempotency-Key` header (8-100 chars); body `{ simulate: 'FAIL' }` makes the mock decline (never in production). Success: `CLEARED`. 402 `PAYMENT_FAILED` keeps it owing; 409 `ALREADY_PAID`, `NOTHING_TO_PAY`, `PAYMENT_IN_PROGRESS`, `IDEMPOTENCY_KEY_REUSED` |
+| `GET /settlements?status&stationId&page&limit` | staff | Without `status`: the ones that need someone (`OUTSTANDING` and `REFUND_PENDING`). Each item is the bill plus `booking` (code, status, customer, scooter code, station, time zone, return station, return time). Scoped to stations the staff run, or where the scooter came back |
+| `GET /settlements/:id` | staff | One bill (404 for other stations) |
+| `POST /settlements/:id/collect` | staff | The customer paid what they owed at the desk (mock). Same rules and errors as the customer payment |
+| `POST /settlements/:id/retry-refund` | staff | Sends the deposit refund again. 409 `NOTHING_TO_RETRY` unless `REFUND_PENDING`; 502 `REFUND_FAILED` if the gateway says no again |
+
+**Charges** (all from the plan values saved on the booking): extra km = started kilometres beyond `includedKmPerHour x hours` at `extraKmRateAmount`; late fee = every started hour counted from the booked end, nothing at or inside `graceMinutes`, at `lateFeePerHourAmount`; damage = the flat fees staff entered at return (damage that was already there is never charged). The charges are taken from the deposit: `refund = max(deposit - charges, 0)`, `outstanding = max(charges - deposit, 0)`. The rental is prepaid and is not refunded for an early return.
+
+**Settlement status:** `REFUND_PENDING` (refund queued or failed; booking stays `RETURNED`) -> `REFUNDED`; `OUTSTANDING` -> `CLEARED`; `NO_ACTION` (charges used the whole deposit, or nothing to move). Booking becomes `SETTLED` once the refund went through or there was nothing to refund (an amount owed is tracked on the settlement).
+
+**Refund timing:** automatic and per ride, right after the return is saved; no end-of-day batch. A failed refund is stored as a failed `Refund` row and the settlement stays `REFUND_PENDING` for staff to retry.
+
+**Blocking:** while a customer has an `OUTSTANDING` settlement, `POST /bookings` returns 409 `OUTSTANDING_BALANCE` with `details: { bookingId, amount }` (the quote stays public). The booking shows under the customer's *Active* tab as "Payment due".
+
+Customer and staff booking responses (`GET /bookings`, `/bookings/:id`, `/station/bookings/:id`) now carry `settlement` (the bill, or null), and the booking status after a ride is `SETTLED` instead of `RETURNED`. Codes added: `SETTLEMENT_NOT_FOUND`, `OUTSTANDING_BALANCE`, `NOTHING_TO_PAY`, `NOTHING_TO_RETRY`, `REFUND_FAILED`.
 
 ### Phase 7 — Dashboards
 `GET /dashboard/admin` · `/dashboard/city/:id` · `/dashboard/station/:id` · `/dashboard/customer`

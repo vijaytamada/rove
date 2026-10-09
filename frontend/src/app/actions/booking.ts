@@ -9,7 +9,7 @@ import { failure, num, text, type FormState } from "@/lib/form";
 import { localToUtcIso } from "@/lib/format";
 import { isUuid } from "@/lib/ids";
 import { getAccessToken } from "@/lib/session";
-import type { BookingView, KycView, QuoteView } from "@/lib/types";
+import type { BookingView, KycView, QuoteView, SettlementView } from "@/lib/types";
 
 /** Where a customer returns to after signing in or verifying: the booking page with their choices kept. */
 function bookingPath(vehicleId: string, hours: number | undefined, startLocal: string) {
@@ -58,6 +58,9 @@ export async function createBooking(_prev: FormState, form: FormData): Promise<F
   const res = await apiRequest<BookingView>("/bookings", { body: { vehicleId, hours, startAt }, token });
   if (!res.ok) {
     if (res.code === "KYC_REQUIRED") redirect(`/verify?next=${encodeURIComponent(returnTo)}`);
+    // Money is owed for an earlier ride: send the customer to pay it, then they can book again.
+    const owed = res.code === "OUTSTANDING_BALANCE" ? res.info?.bookingId : undefined;
+    if (typeof owed === "string" && isUuid(owed)) redirect(`/bookings/${owed}/settle?next=${encodeURIComponent(returnTo)}`);
     return failure(res);
   }
   revalidatePath("/bookings");
@@ -81,6 +84,21 @@ export async function payBooking(id: string, _prev: FormState, form: FormData): 
   }
   revalidatePath("/bookings");
   redirect(`/bookings/${id}?confirmed=1`);
+}
+
+/** Demo payment of what a customer owes after a ride (charges beyond the deposit). */
+export async function paySettlement(bookingId: string, next: string | undefined, _prev: FormState, form: FormData): Promise<FormState> {
+  const token = await getAccessToken();
+  if (!token) redirect(`/login?next=${encodeURIComponent(`/bookings/${bookingId}/settle`)}`);
+  const res = await apiRequest<SettlementView>(`/bookings/${bookingId}/settlement/pay`, {
+    method: "POST",
+    body: form.get("simulate") === "FAIL" && process.env.NODE_ENV !== "production" ? { simulate: "FAIL" } : {},
+    headers: { "Idempotency-Key": randomUUID() },
+    token,
+  });
+  if (!res.ok) return { error: res.message };
+  revalidatePath("/bookings");
+  redirect(safeNext(next) ?? `/bookings/${bookingId}?paid=1`);
 }
 
 export async function cancelBooking(id: string): Promise<FormState> {

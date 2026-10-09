@@ -45,7 +45,7 @@ enum BookingStatus {
   CONFIRMED
   IN_RIDE // Phase 5
   RETURNED // Phase 5
-  SETTLED // Phase 6
+  SETTLED // the refund went through, or there was nothing to refund
   CANCELLED
   EXPIRED // payment hold ran out
   NO_SHOW // Phase 5
@@ -53,7 +53,7 @@ enum BookingStatus {
 
 enum PaymentPurpose {
   RENTAL_AND_DEPOSIT
-  OUTSTANDING // Phase 6
+  OUTSTANDING // what a customer owes after a ride (settlement)
 }
 
 enum PaymentStatus {
@@ -70,7 +70,21 @@ enum RefundStatus {
 enum RefundReason {
   CANCELLATION
   NO_SHOW // the deposit comes back, the rental is kept
-  DEPOSIT_RETURN // Phase 6
+  DEPOSIT_RETURN // what is left of the deposit after a ride's charges
+}
+
+enum SettlementStatus {
+  REFUND_PENDING // the deposit refund has not gone through yet (staff can retry it)
+  REFUNDED // what was left of the deposit went back to the customer
+  OUTSTANDING // charges were more than the deposit; the customer owes the difference
+  CLEARED // the outstanding amount was paid
+  NO_ACTION // charges used the whole deposit, or there was nothing to move
+}
+
+enum SettlementLineType {
+  EXTRA_KM
+  LATE_FEE
+  DAMAGE
 }
 
 enum DamagePhase {
@@ -283,11 +297,12 @@ model Booking {
   createdAt       DateTime      @default(now())
   updatedAt       DateTime      @updatedAt
 
-  user     User      @relation(fields: [userId], references: [id], onDelete: Restrict)
-  vehicle  Vehicle   @relation(fields: [vehicleId], references: [id], onDelete: Restrict)
-  station  Station   @relation(fields: [stationId], references: [id], onDelete: Restrict)
-  payments Payment[]
-  rental   Rental?
+  user       User        @relation(fields: [userId], references: [id], onDelete: Restrict)
+  vehicle    Vehicle     @relation(fields: [vehicleId], references: [id], onDelete: Restrict)
+  station    Station     @relation(fields: [stationId], references: [id], onDelete: Restrict)
+  payments   Payment[]
+  rental     Rental?
+  settlement Settlement?
 
   @@index([userId, createdAt])
   @@index([userId, status])
@@ -348,7 +363,7 @@ model KycRecord {
 }
 
 // The physical ride of a booking: created when staff hand the scooter over, completed when it is brought back.
-// Readings are taken by staff. The late fee, extra km and damage charges are settled in Phase 6.
+// Readings are taken by staff. The late fee, extra km and damage charges are billed on the Settlement.
 model Rental {
   id                  String    @id @default(uuid()) @db.Uuid
   bookingId           String    @unique @db.Uuid
@@ -382,7 +397,7 @@ model Rental {
 }
 
 // Damage noted at handover (already there) or at return (new). `feeAmount` is a flat amount entered by staff,
-// charged against the deposit in Phase 6.
+// charged against the deposit on the Settlement.
 model DamageRecord {
   id           String         @id @default(uuid()) @db.Uuid
   rentalId     String         @db.Uuid
@@ -397,4 +412,42 @@ model DamageRecord {
   recordedBy User   @relation(fields: [recordedById], references: [id], onDelete: Restrict)
 
   @@index([rentalId])
+}
+
+// The final bill of a ride: charges taken from the deposit, then a refund or an amount the customer owes.
+// Created in the same step that takes the scooter back. All amounts are integer paise.
+model Settlement {
+  id                String           @id @default(uuid()) @db.Uuid
+  bookingId         String           @unique @db.Uuid
+  depositHeld       Int
+  totalCharges      Int
+  refundAmount      Int
+  outstandingAmount Int
+  status            SettlementStatus
+  // When the refund went through, or when nothing needed moving.
+  settledAt         DateTime?
+  // When an outstanding amount was paid.
+  clearedAt         DateTime?
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+
+  booking   Booking              @relation(fields: [bookingId], references: [id], onDelete: Restrict)
+  lineItems SettlementLineItem[]
+
+  @@index([status])
+}
+
+model SettlementLineItem {
+  id           String             @id @default(uuid()) @db.Uuid
+  settlementId String             @db.Uuid
+  type         SettlementLineType
+  description  String
+  // Started kilometres or started hours; 1 for damage.
+  quantity     Int
+  unitAmount   Int
+  amount       Int
+
+  settlement Settlement @relation(fields: [settlementId], references: [id], onDelete: Cascade)
+
+  @@index([settlementId])
 }

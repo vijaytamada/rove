@@ -1,11 +1,12 @@
 "use server";
 
+import { randomUUID } from "node:crypto";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { apiRequest, type ApiResult } from "@/lib/api";
 import { failure, num, optional, paise, text, valuesOf, type FormState } from "@/lib/form";
 import { getAccessToken } from "@/lib/session";
-import type { StaffBookingView } from "@/lib/types";
+import type { StaffBookingView, StaffSettlementView } from "@/lib/types";
 
 async function token(id: string) {
   const t = await getAccessToken();
@@ -82,4 +83,29 @@ export async function noShowAction(id: string): Promise<FormState> {
   const res = await apiRequest<StaffBookingView>(`/station/bookings/${id}/no-show`, { method: "POST", body: {}, token: await token(id) });
   if (!res.ok) return { error: res.message };
   return done(id, "no-show");
+}
+
+/** Staff took the payment of an outstanding amount at the desk (demo: nothing is charged). */
+export async function collectSettlementAction(settlementId: string, bookingId: string): Promise<FormState> {
+  const res = await apiRequest<StaffSettlementView>(`/settlements/${settlementId}/collect`, {
+    method: "POST",
+    body: {},
+    headers: { "Idempotency-Key": randomUUID() },
+    token: await token(bookingId),
+  });
+  if (!res.ok) return { error: res.message };
+  revalidatePath("/staff/settlements");
+  return done(bookingId, "collected");
+}
+
+/** Sends the deposit refund again after a failure. */
+export async function retryRefundAction(settlementId: string, bookingId: string): Promise<FormState> {
+  const res = await apiRequest<StaffSettlementView>(`/settlements/${settlementId}/retry-refund`, {
+    method: "POST",
+    body: {},
+    token: await token(bookingId),
+  });
+  if (!res.ok) return { error: res.message };
+  revalidatePath("/staff/settlements");
+  return done(bookingId, "refunded");
 }

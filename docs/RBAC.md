@@ -53,9 +53,14 @@ A user has exactly one role. Role is in the JWT; **scope is loaded from DB (cach
 - Reading another station's booking is 404, not 403, so its existence is not revealed. Staff responses never include the pickup PIN.
 - All desk routes need `STATION_EMPLOYEE`, `CITY_MANAGER` or `SUPER_ADMIN`; customers get 403. The e2e suite covers each role and scope, and the QA sweep checks every desk route rejects anonymous and wrong-role callers.
 
+## Settlements (Phase 6)
+- Customers read and pay only their own bill (`/bookings/:id/settlement`, 404 for anyone else's); staff get 403 on those routes.
+- Staff routes (`/settlements`) are scoped like the desk: a bill is visible to staff who run the booking's pickup station or the station the scooter was returned to (managers: their cities; admins: all). Other stations get 404, customers 403.
+- Staff can take the payment of an amount owed and retry a failed refund. **Waiving or changing a charge is not built yet** (the matrix row below is the plan: managers and admins).
+
 ## Notes
 - Employee "own station" for a return means the **return station** (the vehicle may have been picked up elsewhere).
-- Customers cannot book without a verified identity check (`KYC_REQUIRED`); the outstanding-settlement block arrives in Phase 6. Phase 4: booking, payment, cancel and the identity check are `CUSTOMER`-only routes (staff get 403, even admins); pricing plans are readable by all staff and writable by super admins only; a customer sees only their own bookings (404 for others).
+- Customers cannot book without a verified identity check (`KYC_REQUIRED`); a customer who owes money for an earlier ride cannot book again (`OUTSTANDING_BALANCE`) until it is paid. Phase 4: booking, payment, cancel and the identity check are `CUSTOMER`-only routes (staff get 403, even admins); pricing plans are readable by all staff and writable by super admins only; a customer sees only their own bookings (404 for others).
 - Customers sign in with phone + one-time code; staff roles sign in with email + password. A customer can never use the password endpoint and a staff number is never sent a sign-in code. There is no public registration: staff accounts are created by a super admin (or a manager for employees).
 - Deactivated users (`status=DISABLED`) are rejected at login and refresh.
 - Every staff mutation that touches money, vehicle status, or roles writes an `AuditLog` row.

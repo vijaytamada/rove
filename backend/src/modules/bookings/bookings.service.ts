@@ -10,6 +10,7 @@ import { PAYMENT_PROVIDER, type PaymentProvider } from '../../providers/payment/
 import { PaymentsService } from '../payments/payments.service.js';
 import { KycService } from '../kyc/kyc.service.js';
 import { PricingPlansService, type PricingView } from '../pricing/pricing-plans.service.js';
+import { SettlementsService } from '../settlements/settlements.service.js';
 import { quoteRental, type RentalQuote } from '../pricing/rental-quote.js';
 import { toModelView, type VehicleModelView } from '../vehicles/vehicle-models.service.js';
 import { liveBookingOverlap, liveBookingWhere } from './booking-availability.js';
@@ -56,6 +57,7 @@ export class BookingsService {
     @Inject(KycService) private readonly kyc: KycService,
     @Inject(PAYMENT_PROVIDER) private readonly payments: PaymentProvider,
     @Inject(PaymentsService) private readonly refunds: PaymentsService,
+    @Inject(SettlementsService) private readonly settlements: SettlementsService,
     @Inject(ConfigService) config: ConfigService<Env, true>,
   ) {
     this.pinSecret = config.get('JWT_ACCESS_SECRET', { infer: true });
@@ -71,6 +73,7 @@ export class BookingsService {
     if (!(await this.kyc.isVerified(user.id))) {
       throw new AppException(403, 'KYC_REQUIRED', 'Verify your identity before booking.');
     }
+    await this.settlements.assertNoOutstanding(user.id);
     const prepared = await this.prepare(dto, now);
     const { quote } = prepared;
 
@@ -395,12 +398,17 @@ function tabFilter(tab: BookingTab, now: Date): Prisma.BookingWhereInput {
           { status: 'PENDING_PAYMENT' },
           { status: 'IN_RIDE' },
           { status: 'CONFIRMED', startAt: { lte: now } },
+          // Money still owed for the ride needs the customer's attention.
+          { status: 'SETTLED', settlement: { is: { status: 'OUTSTANDING' } } },
         ],
       };
     case 'upcoming':
       return { status: 'CONFIRMED', startAt: { gt: now } };
     case 'past':
-      return { status: { in: ['RETURNED', 'SETTLED', 'CANCELLED', 'EXPIRED', 'NO_SHOW'] } };
+      return {
+        status: { in: ['RETURNED', 'SETTLED', 'CANCELLED', 'EXPIRED', 'NO_SHOW'] },
+        NOT: { settlement: { is: { status: 'OUTSTANDING' } } },
+      };
   }
 }
 

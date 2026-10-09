@@ -134,6 +134,83 @@ class RentalSummary {
       );
 }
 
+enum SettlementStatus {
+  refundPending('REFUND_PENDING'),
+  refunded('REFUNDED'),
+  outstanding('OUTSTANDING'),
+  cleared('CLEARED'),
+  noAction('NO_ACTION');
+
+  const SettlementStatus(this.wire);
+
+  final String wire;
+
+  static SettlementStatus parse(String wire) => values.firstWhere((s) => s.wire == wire, orElse: () => SettlementStatus.noAction);
+}
+
+/// One charge on the final bill: extra distance, a late return or damage.
+class SettlementLine {
+  const SettlementLine({required this.type, required this.description, required this.quantity, required this.unitAmount, required this.amount});
+
+  /// `EXTRA_KM`, `LATE_FEE` or `DAMAGE`.
+  final String type;
+  final String description;
+  final int quantity;
+  final int unitAmount;
+  final int amount;
+
+  String get label => switch (type) {
+        'EXTRA_KM' => 'Extra distance',
+        'LATE_FEE' => 'Late return',
+        _ => 'Damage',
+      };
+
+  factory SettlementLine.fromJson(Map<String, dynamic> json) => SettlementLine(
+        type: json['type'] as String,
+        description: json['description'] as String,
+        quantity: (json['quantity'] as num).toInt(),
+        unitAmount: (json['unitAmount'] as num).toInt(),
+        amount: (json['amount'] as num).toInt(),
+      );
+}
+
+/// The final bill of a ride: charges taken from the deposit, then a refund or an amount owed. All amounts come from the backend.
+class SettlementView {
+  const SettlementView({
+    required this.id,
+    required this.status,
+    required this.depositHeld,
+    required this.totalCharges,
+    required this.refundAmount,
+    required this.outstandingAmount,
+    required this.lines,
+    required this.payable,
+    this.clearedAt,
+  });
+
+  final String id;
+  final SettlementStatus status;
+  final int depositHeld;
+  final int totalCharges;
+  final int refundAmount;
+  final int outstandingAmount;
+  final List<SettlementLine> lines;
+  final bool payable;
+  final DateTime? clearedAt;
+
+  factory SettlementView.fromJson(Map<String, dynamic> json) => SettlementView(
+        id: json['id'] as String,
+        status: SettlementStatus.parse(json['status'] as String),
+        depositHeld: (json['depositHeld'] as num).toInt(),
+        totalCharges: (json['totalCharges'] as num).toInt(),
+        refundAmount: (json['refundAmount'] as num).toInt(),
+        outstandingAmount: (json['outstandingAmount'] as num).toInt(),
+        lines: (json['lineItems'] as List).map((e) => SettlementLine.fromJson(e as Map<String, dynamic>)).toList(),
+        payable: json['payable'] as bool,
+        clearedAt: _timeOrNull(json['clearedAt']),
+      );
+}
+
 class BookingView {
   const BookingView({
     required this.id,
@@ -155,6 +232,7 @@ class BookingView {
     required this.refundedAmount,
     required this.cancellation,
     this.rental,
+    this.settlement,
     this.holdExpiresAt,
     this.confirmedAt,
     this.cancelledAt,
@@ -187,6 +265,12 @@ class BookingView {
   final CancellationOutcome cancellation;
   final RentalSummary? rental;
 
+  /// The final bill, once the scooter has been returned.
+  final SettlementView? settlement;
+
+  /// Settled, but money is still owed for the ride.
+  bool get owing => settlement?.status == SettlementStatus.outstanding;
+
   factory BookingView.fromJson(Map<String, dynamic> json) {
     final vehicle = json['vehicle'] as Map<String, dynamic>;
     return BookingView(
@@ -213,6 +297,7 @@ class BookingView {
       refundedAmount: (json['refundedAmount'] as num).toInt(),
       cancellation: CancellationOutcome.fromJson(json['cancellation'] as Map<String, dynamic>),
       rental: json['rental'] == null ? null : RentalSummary.fromJson(json['rental'] as Map<String, dynamic>),
+      settlement: json['settlement'] == null ? null : SettlementView.fromJson(json['settlement'] as Map<String, dynamic>),
     );
   }
 }

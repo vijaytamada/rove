@@ -11,6 +11,7 @@ import type {
 } from '../../generated/prisma/client.js';
 import type { PlanRates } from '../pricing/rental-quote.js';
 import { toModelView, type VehicleModelView } from '../vehicles/vehicle-models.service.js';
+import { toSettlementView, type SettlementRow, type SettlementView } from '../settlements/settlement-views.js';
 import { derivePin } from './booking-codes.js';
 import { cancellationOutcome, type CancellationOutcome } from './booking-rules.js';
 
@@ -53,6 +54,8 @@ export interface BookingView {
   payment: { status: PaymentStatus; chargeAmount: number; paidAt: Date | null } | null;
   /** Money already returned to the customer. */
   refundedAmount: number;
+  /** The final bill of the ride (extra km, late fee, damage, refund or amount owed), once it has been returned. */
+  settlement: SettlementView | null;
   /** What cancelling right now would do, so the client never works it out itself. */
   cancellation: CancellationOutcome;
   /** The ride itself, once the scooter has been handed over. */
@@ -63,6 +66,7 @@ export type BookingRow = Booking & {
   vehicle: Vehicle & { model: VehicleModel };
   station: Station & { city: City };
   payments: (Payment & { refunds: Refund[] })[];
+  settlement: SettlementRow | null;
   rental: (Rental & { returnStation: Station | null }) | null;
 };
 
@@ -70,6 +74,7 @@ export const BOOKING_INCLUDE = {
   vehicle: { include: { model: true } },
   station: { include: { city: true } },
   payments: { include: { refunds: true }, orderBy: { createdAt: 'desc' as const } },
+  settlement: { include: { lineItems: true } },
   rental: { include: { returnStation: true } },
 } as const;
 
@@ -114,6 +119,7 @@ export function toBookingView(b: BookingRow, pinSecret: string, now: Date): Book
     station: toStationSummary(b.station),
     payment: latest ? { status: latest.status, chargeAmount: latest.chargeAmount, paidAt: latest.paidAt } : null,
     refundedAmount,
+    settlement: b.settlement ? toSettlementView(b.settlement) : null,
     cancellation: cancellationOutcome(b, now),
     rental: b.rental
       ? {
