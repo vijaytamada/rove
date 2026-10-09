@@ -140,6 +140,8 @@ class FakeBackend {
   bool failNextPayment = false;
   bool stationOpen = true;
   bool failNextSettlementPayment = false;
+  int dashboardRides = 0;
+  double dashboardKm = 0;
   String? owedBookingId;
   String? lastSettlePayBody;
   Map<String, String>? lastSettlePayHeaders;
@@ -218,6 +220,26 @@ class FakeBackend {
       );
       bookings[b['id'] as String] = b;
       return json(200, b);
+    }
+    if (path.endsWith('/dashboard/customer')) {
+      bool owing(Map<String, dynamic> b) => (b['settlement'] as Map?)?['status'] == 'OUTSTANDING';
+      final all = bookings.values.toList();
+      Map<String, dynamic>? first(bool Function(Map<String, dynamic>) test) {
+        final hits = all.where(test);
+        return hits.isEmpty ? null : hits.first;
+      }
+
+      final active = first((b) => ['PENDING_PAYMENT', 'IN_RIDE'].contains(b['status']) || owing(b));
+      final upcoming = first((b) => b['status'] == 'CONFIRMED');
+      final recent = all.where((b) => ['CANCELLED', 'EXPIRED', 'RETURNED', 'SETTLED', 'NO_SHOW'].contains(b['status']) && !owing(b)).take(3).toList();
+      final owed = first(owing);
+      return json(200, {
+        'active': active,
+        'upcoming': upcoming,
+        'recent': recent,
+        'owed': owed == null ? null : {'bookingId': owed['id'], 'amount': (owed['settlement'] as Map)['outstandingAmount']},
+        'stats': {'rides': dashboardRides, 'distanceKm': dashboardKm},
+      });
     }
     final settle = RegExp(r'/bookings/([^/]+)/settlement/pay$').firstMatch(path);
     if (settle != null) {
@@ -711,6 +733,70 @@ void main() {
     await tester.tap(find.widgetWithText(FilledButton, 'Continue'));
     await tester.pumpAndSettle();
     expect(find.text('Pay to confirm'), findsOneWidget);
+  });
+
+  testWidgets('home shows recent rides with the ride totals', (tester) async {
+    final backend = FakeBackend()
+      ..kycVerified = true
+      ..dashboardRides = 3
+      ..dashboardKm = 41.5;
+    backend.bookings['s1'] = bookingJson(
+      id: 's1',
+      status: 'SETTLED',
+      refunded: 88900,
+      cancellation: noCancel(),
+      rental: returnedRental(),
+      settlement: settlementJson(),
+    );
+    backend.bookings['c1'] = bookingJson(id: 'c1', status: 'CANCELLED', cancellation: noCancel());
+    final env = TestEnv(backend.handle);
+    await signInAndOpen(tester, env);
+
+    expect(find.text('Recent rides'), findsOneWidget);
+    expect(find.text('3 rides · 41.5 km'), findsOneWidget);
+    expect(find.text('Settled'), findsOneWidget);
+    expect(find.text('Cancelled'), findsOneWidget);
+    expect(find.textContaining('You owe'), findsNothing);
+    // A recent ride opens its booking with the final bill.
+    await tester.tap(find.text('Settled'));
+    await tester.pumpAndSettle();
+    expect(find.text('Final bill'), findsOneWidget);
+  });
+
+  testWidgets('home puts money owed first and opens the payment screen from it', (tester) async {
+    final backend = FakeBackend()..kycVerified = true;
+    backend.bookings['o1'] = owingBooking();
+    final env = TestEnv(backend.handle);
+    await signInAndOpen(tester, env);
+
+    expect(find.textContaining('You owe ₹500 for your last ride.'), findsOneWidget);
+    // The owing ride is also the booking that needs attention.
+    expect(find.text('Your booking'), findsOneWidget);
+    expect(find.text('Payment due'), findsOneWidget);
+
+    await tester.tap(find.textContaining('You owe ₹500 for your last ride.'));
+    await tester.pumpAndSettle();
+    expect(find.text('Pay what you owe'), findsOneWidget);
+    await tester.tap(find.widgetWithText(FilledButton, 'Pay ₹500'));
+    await tester.pumpAndSettle();
+    // Back on home, the banner is gone.
+    expect(find.text('Pay what you owe'), findsNothing);
+    expect(find.textContaining('You owe ₹500 for your last ride.'), findsNothing);
+  });
+
+  testWidgets('home labels a paid booking that has not started as coming up', (tester) async {
+    final backend = FakeBackend()..kycVerified = true;
+    backend.bookings['u1'] = bookingJson(
+      id: 'u1',
+      status: 'CONFIRMED',
+      start: DateTime.now().toUtc().add(const Duration(hours: 5)),
+      cancellation: {'allowed': true, 'refundAmount': 109800, 'retainedAmount': 0},
+    );
+    final env = TestEnv(backend.handle);
+    await signInAndOpen(tester, env);
+    expect(find.text('Coming up'), findsOneWidget);
+    expect(find.text('Your booking'), findsNothing);
+    expect(find.text('Recent rides'), findsNothing);
   });
 
   testWidgets('a late cancellation says the rental is kept', (tester) async {

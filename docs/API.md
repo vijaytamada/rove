@@ -121,8 +121,23 @@ The final bill of a ride, made in the same step that takes the scooter back (`PO
 
 Customer and staff booking responses (`GET /bookings`, `/bookings/:id`, `/station/bookings/:id`) now carry `settlement` (the bill, or null), and the booking status after a ride is `SETTLED` instead of `RETURNED`. Codes added: `SETTLEMENT_NOT_FOUND`, `OUTSTANDING_BALANCE`, `NOTHING_TO_PAY`, `NOTHING_TO_RETRY`, `REFUND_FAILED`.
 
-### Phase 7 — Dashboards
-`GET /dashboard/admin` · `/dashboard/city/:id` · `/dashboard/station/:id` · `/dashboard/customer`
+### Phase 7 - Dashboards
+Read-only numbers for each role's home. Nothing here changes data and there are no new tables. Every staff dashboard takes `?range=1d|7d|30d` (default `7d`): a **rolling** window ending now (the last 24 hours, 7 days or 30 days), so it means the same in every city's time zone. Anything else is a 400.
+
+| Route | Who | What it returns |
+|---|---|---|
+| `GET /dashboard/admin` | super admin | The whole network (the metrics below) plus `cities[]`: one row per city (`stations`, `fleet`, `utilizationPercent`, `money`, and the "now" numbers for waiting, out, late, owed, refunds pending) |
+| `GET /dashboard/city/:id` | manager of that city, super admin | `city`, the metrics for the city, and `stations[]`: one row per station. Other managers get 403, an unknown city 404 `CITY_NOT_FOUND` |
+| `GET /dashboard/station/:id` | employee of that station, manager of its city, super admin | `station`, the metrics for the station, and `queue`: `pickups[]` (next 5 paid bookings waiting, soonest first) and `rides[]` (next 5 rides out, earliest due first), each `{ id, code, customerName, vehicleCode, startAt, endAt, overdue }`. Never includes the PIN |
+| `GET /dashboard/customer` | customer | `active` (a ride, an unpaid hold, a pickup due, or money owed), `upcoming` (next paid booking not started), `recent` (last 3 finished), `owed` (`{ bookingId, amount }` or null), `stats` (`rides` finished, `distanceKm`). Bookings are the same objects as `GET /bookings` |
+
+**The metrics** (same shape for the network, a city and a station):
+- `fleet`: `total`, `available`, `inRide`, `maintenance`, `offline`. A scooter out on a ride has no station, so `inRide` is counted from rides that started in the slice.
+- `utilizationPercent`: ride hours inside the window divided by scooter-hours (`fleet.total` x window hours), 0-100 with one decimal, worked out in the database.
+- `activity` (inside the window): `newBookings` (paid), `ridesStarted`, `ridesCompleted`, `cancellations`, `noShows`.
+- `money` (inside the window, paise): `collected` (successful payments), `refunded` (successful refunds), `net` (collected minus refunded). `net` still includes deposits that are held, so it is **not** earnings.
+- `now` (not tied to the window): `waitingPickups`, `ridesOut`, `overdueRides` (out past the booked end), `depositsHeld` (deposits of paid bookings not yet settled), `owed` and `refundsPending` (`{ count, amount }`).
+Rides, payments and settlements belong to the station where the ride started.
 
 ### Phase 8+ 
 `GET /notifications` · `POST /webhooks/payments` · `POST /webhooks/kyc` · `POST /telemetry` · `GET /fleet/live` · lock/unlock endpoints — designed in their phases.

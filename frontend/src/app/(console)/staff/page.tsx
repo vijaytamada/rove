@@ -3,12 +3,13 @@ import { Search } from "lucide-react";
 import { DeskFilters } from "@/components/desk/DeskFilters";
 import { EmptyRow, PageHeader, TableWrap, Td, Th } from "@/components/admin/ui";
 import { BookingStatusChip } from "@/components/booking/BookingStatusChip";
+import { Stat } from "@/components/dashboard/Stat";
 import { requireRole } from "@/lib/dal";
 import { formatMoney, formatRange } from "@/lib/format";
 import { isUuid } from "@/lib/ids";
 import { formatPhone } from "@/lib/phone";
 import { apiGet, apiGetAll } from "@/lib/server-api";
-import type { DeskTab, Page, StaffBookingView, StationView } from "@/lib/types";
+import type { DeskTab, Page, StaffBookingView, StationDashboard, StationView } from "@/lib/types";
 
 export const metadata = { title: "Station desk" };
 export const dynamic = "force-dynamic";
@@ -51,6 +52,10 @@ export default async function StationDesk({
     );
   }
 
+  // The numbers behind the queue, for the one station this desk is about (an employee's own, or the chosen filter).
+  const summaryId = stationId ?? (stations.length === 1 ? stations[0]?.id : undefined);
+  const summary = summaryId ? await apiGet<StationDashboard>(`/dashboard/station/${summaryId}?range=1d`) : null;
+
   const params = new URLSearchParams({ limit: "50" });
   if (tab) params.set("tab", tab);
   if (q) params.set("q", q);
@@ -62,6 +67,33 @@ export default async function StationDesk({
   return (
     <>
       <PageHeader title="Station desk" description="Hand scooters over, take them back and look after customers who don't turn up." />
+
+      {summary && (
+        <section aria-label={`${summary.station.name} today`} className="mb-6 grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
+          <Stat label="Waiting for pickup" value={summary.now.waitingPickups} href="/staff?tab=pickups" />
+          <Stat
+            label="Out on a ride"
+            value={summary.now.ridesOut}
+            hint={summary.now.overdueRides > 0 ? `${summary.now.overdueRides} past the booked time` : "none late"}
+            tone={summary.now.overdueRides > 0 ? "warn" : "plain"}
+            href="/staff?tab=rides"
+          />
+          <Stat
+            label="Owed by customers"
+            value={formatMoney(summary.now.owed.amount)}
+            hint={`${summary.now.owed.count} ${summary.now.owed.count === 1 ? "ride" : "rides"}`}
+            tone={summary.now.owed.count > 0 ? "bad" : "plain"}
+            href="/staff/settlements"
+          />
+          <Stat
+            label="Refunds not sent"
+            value={summary.now.refundsPending.count}
+            hint={summary.now.refundsPending.count > 0 ? formatMoney(summary.now.refundsPending.amount) : "all sent"}
+            tone={summary.now.refundsPending.count > 0 ? "bad" : "plain"}
+            href="/staff/settlements?tab=refunds"
+          />
+        </section>
+      )}
 
       <DeskFilters stations={stations.map((s) => ({ id: s.id, name: s.name }))} stationId={stationId} tab={tab} q={q} />
 

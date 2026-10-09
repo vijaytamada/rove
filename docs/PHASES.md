@@ -67,6 +67,7 @@ Each phase ends with a usable increment and a completion checklist. Don't start 
 - **Outcome:** **MVP demo script passes end-to-end.** Engine has table-driven unit tests covering edge cases (exactly on grace boundary, 0 km, deposit < charges, etc.).
 
 ## Phase 7 — Operations Dashboard
+**Status: complete and tested on `feature/dashboards` (not merged).** `GET /dashboard/admin|city/:id|station/:id|customer` (read-only, no new tables, rolling 24 hour / 7 day / 30 day windows); website: `/admin` overview for admins and managers (right now, fleet and utilization, activity, money, a row per city or station), a station strip on the desk, and the customer home with recent rides and money owed; app: the same customer home. Backend: 10 unit + 16 e2e tests; Flutter: 4 new tests.
 - **Objective:** Role-specific dashboards.
 - **Features:** Super Admin: global counts/revenue/fleet status; City Manager: city bookings, fleet utilization, outstanding settlements; Station Employee: station queue; Customer: home with active rental, history, profile. Read-only aggregate endpoints.
 - **Modules:** `Dashboard` (queries only, no new tables).

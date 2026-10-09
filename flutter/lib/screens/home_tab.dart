@@ -3,11 +3,13 @@ import 'package:flutter/material.dart';
 import '../api/booking_api.dart';
 import '../auth/auth_controller.dart';
 import '../models/booking.dart';
+import '../format.dart';
 import '../models/user.dart';
 import '../theme/tokens.dart';
 import '../widgets/booking_cards.dart';
 import '../widgets/wordmark.dart';
 import 'booking_detail_screen.dart';
+import 'settle_screen.dart';
 
 class HomeTab extends StatefulWidget {
   const HomeTab({super.key, required this.active});
@@ -20,7 +22,7 @@ class HomeTab extends StatefulWidget {
 }
 
 class _HomeTabState extends State<HomeTab> {
-  BookingView? _next;
+  CustomerDashboard? _dash;
   bool _started = false;
 
   @override
@@ -38,20 +40,23 @@ class _HomeTabState extends State<HomeTab> {
     if (widget.active && !old.active) _loadNext();
   }
 
-  /// The booking a customer most likely cares about: something active, else the next upcoming one.
+  /// The customer's home numbers: the booking they care about, recent rides, what they owe.
   Future<void> _loadNext() async {
     final auth = AuthScope.of(context);
     if (auth.user?.role != Role.customer) return;
-    final api = BookingApi(auth.api);
-    for (final tab in [BookingTab.active, BookingTab.upcoming]) {
-      final (items, _) = await api.list(tab, limit: 1);
-      if (!mounted) return;
-      if (items != null && items.isNotEmpty) {
-        setState(() => _next = items.first);
-        return;
-      }
-    }
-    if (mounted) setState(() => _next = null);
+    final (dash, _) = await BookingApi(auth.api).dashboard();
+    if (!mounted) return;
+    // Keep what is on screen if the call failed (offline): an empty home would look like the bookings are gone.
+    if (dash != null) setState(() => _dash = dash);
+  }
+
+  /// Opens the pay-what-you-owe screen for the ride the banner is about.
+  Future<void> _payOwed(OwedAmount owed) async {
+    final api = BookingApi(AuthScope.of(context).api);
+    final (booking, _) = await api.get(owed.bookingId);
+    if (!mounted || booking == null || booking.settlement == null) return;
+    await Navigator.of(context).push(MaterialPageRoute<bool>(builder: (_) => SettleScreen(booking: booking)));
+    if (mounted) _loadNext();
   }
 
   @override
@@ -59,7 +64,8 @@ class _HomeTabState extends State<HomeTab> {
     final user = AuthScope.of(context).user!;
     final theme = Theme.of(context);
     final staff = user.role != Role.customer;
-    final next = _next;
+    final dash = _dash;
+    final next = dash?.next;
 
     return Scaffold(
       appBar: AppBar(title: const Wordmark(), centerTitle: false),
@@ -78,9 +84,16 @@ class _HomeTabState extends State<HomeTab> {
                   : 'Find a station, pick a scooter and book it in a minute.',
               style: const TextStyle(color: Tokens.inkMuted, fontSize: 16),
             ),
+            if (dash?.owed != null) ...[
+              const SizedBox(height: 24),
+              _OwedBanner(owed: dash!.owed!, onTap: () => _payOwed(dash.owed!)),
+            ],
             if (next != null) ...[
               const SizedBox(height: 24),
-              Text(next.status == BookingStatus.pendingPayment ? 'Finish your booking' : 'Your booking',
+              Text(
+                  next.status == BookingStatus.pendingPayment
+                      ? 'Finish your booking'
+                      : (dash!.active != null ? 'Your booking' : 'Coming up'),
                   style: const TextStyle(color: Tokens.inkMuted, fontWeight: FontWeight.w500)),
               const SizedBox(height: 8),
               BookingCard(
@@ -91,6 +104,41 @@ class _HomeTabState extends State<HomeTab> {
                   );
                   if (mounted) _loadNext();
                 },
+              ),
+            ],
+            if (dash != null && dash.recent.isNotEmpty) ...[
+              const SizedBox(height: 24),
+              Row(
+                children: [
+                  const Expanded(
+                    child: Text('Recent rides', style: TextStyle(color: Tokens.inkMuted, fontWeight: FontWeight.w500)),
+                  ),
+                  if (dash.rides > 0)
+                    Text('${dash.rides} ${dash.rides == 1 ? 'ride' : 'rides'} · ${formatKm(dash.distanceKm)} km',
+                        style: const TextStyle(color: Tokens.inkMuted, fontSize: 14)),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Card(
+                clipBehavior: Clip.antiAlias,
+                child: Column(
+                  children: [
+                    for (final (i, b) in dash.recent.indexed) ...[
+                      if (i > 0) const Divider(height: 1, color: Tokens.line),
+                      ListTile(
+                        title: Text(b.model.title, style: const TextStyle(fontWeight: FontWeight.w500)),
+                        subtitle: Text('${b.station.name} · ${formatDateTime(b.startAt, b.station.timezone)}'),
+                        trailing: BookingStatusChip(b.status),
+                        onTap: () async {
+                          await Navigator.of(context).push(
+                            MaterialPageRoute<void>(builder: (_) => BookingDetailScreen(bookingId: b.id, initial: b)),
+                          );
+                          if (mounted) _loadNext();
+                        },
+                      ),
+                    ],
+                  ],
+                ),
               ),
             ],
             const SizedBox(height: 24),
@@ -115,6 +163,38 @@ class _HomeTabState extends State<HomeTab> {
       ),
     );
   }
+}
+
+/// Money owed for an earlier ride: tapping it opens the payment screen.
+class _OwedBanner extends StatelessWidget {
+  const _OwedBanner({required this.owed, required this.onTap});
+
+  final OwedAmount owed;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) => Material(
+        color: const Color(0xFFFEF2F2),
+        borderRadius: BorderRadius.circular(Tokens.radiusControl),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(Tokens.radiusControl),
+          onTap: onTap,
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Text.rich(
+              TextSpan(
+                style: const TextStyle(color: Color(0xFFB91C1C), fontSize: 14),
+                children: [
+                  TextSpan(
+                      text: 'You owe ${formatMoney(owed.amount)} for your last ride. ',
+                      style: const TextStyle(fontWeight: FontWeight.w600)),
+                  const TextSpan(text: 'Pay it to book again.'),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
 }
 
 class _Step extends StatelessWidget {

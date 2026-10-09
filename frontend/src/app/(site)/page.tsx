@@ -1,8 +1,11 @@
 import { ButtonLink } from "@/components/app/ButtonLink";
+import Link from "next/link";
 import { BookingCard } from "@/components/booking/BookingCard";
+import { BookingStatusChip } from "@/components/booking/BookingStatusChip";
 import { homeFor } from "@/lib/access";
-import { getNextBooking } from "@/lib/bookings";
+import { getCustomerDashboard } from "@/lib/bookings";
 import { getCurrentUser } from "@/lib/dal";
+import { formatMoney } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
 
@@ -17,7 +20,8 @@ export default async function Home() {
   const user = await getCurrentUser();
   const consoleHref = user && user.role !== "CUSTOMER" ? homeFor(user.role) : null;
   const firstName = user?.fullName.split(" ")[0];
-  const next = user?.role === "CUSTOMER" ? await getNextBooking() : null;
+  const dash = user?.role === "CUSTOMER" ? await getCustomerDashboard() : null;
+  const next = dash?.active ?? dash?.upcoming ?? null;
 
   return (
     <div className="grid items-center gap-10 lg:grid-cols-2 lg:gap-16 lg:py-8">
@@ -34,12 +38,51 @@ export default async function Home() {
             : "Pick up at a station near you, ride, and drop it off at any station in your city. Simple pricing and a refundable deposit."}
         </p>
 
+        {dash?.owed && (
+          <Link
+            href={`/bookings/${dash.owed.bookingId}/settle`}
+            className="mt-8 block max-w-md rounded-card border border-red-200 bg-red-50 p-4 text-sm text-red-700 transition-colors hover:bg-red-100"
+          >
+            <span className="font-medium">You owe {formatMoney(dash.owed.amount)} for your last ride.</span> Pay it to book again.
+          </Link>
+        )}
+
         {next && (
           <div className="mt-8 max-w-md">
             <h2 className="mb-3 text-sm font-medium text-ink-muted">
-              {next.status === "PENDING_PAYMENT" ? "Finish your booking" : "Your booking"}
+              {next.status === "PENDING_PAYMENT" ? "Finish your booking" : dash?.active ? "Your booking" : "Coming up"}
             </h2>
             <BookingCard booking={next} />
+          </div>
+        )}
+
+        {dash && dash.recent.length > 0 && (
+          <div className="mt-8 max-w-md">
+            <div className="mb-3 flex items-baseline justify-between">
+              <h2 className="text-sm font-medium text-ink-muted">Recent rides</h2>
+              {dash.stats.rides > 0 && (
+                <p className="text-sm text-ink-muted">
+                  {dash.stats.rides} {dash.stats.rides === 1 ? "ride" : "rides"} · {dash.stats.distanceKm} km
+                </p>
+              )}
+            </div>
+            <ul className="divide-y divide-line overflow-hidden rounded-card border border-line bg-surface">
+              {dash.recent.map((b) => (
+                <li key={b.id}>
+                  <Link href={`/bookings/${b.id}`} className="flex items-center justify-between gap-3 px-4 py-3 text-sm transition-colors hover:bg-canvas">
+                    <span className="min-w-0">
+                      <span className="block truncate font-medium">
+                        {b.vehicle.model.brand} {b.vehicle.model.name}
+                      </span>
+                      <span className="block truncate text-ink-muted">
+                        {b.station.name} · {new Date(b.startAt).toLocaleDateString("en-IN", { day: "numeric", month: "short", timeZone: b.station.timezone })}
+                      </span>
+                    </span>
+                    <BookingStatusChip status={b.status} />
+                  </Link>
+                </li>
+              ))}
+            </ul>
           </div>
         )}
 

@@ -91,7 +91,7 @@ Web: Tailwind + **shadcn/ui** (Radix) customized to the tokens above. Flutter: M
 
 ## 7. Staff screens (MVP)
 - **Employee (website, phone and desktop):** the **Station desk** at `/staff`: three queues (Pickups, On a ride, Done), one search box (booking code, phone or name; searching without a queue looks everywhere), a station filter for managers and admins. Each row ends with the next step as a button: *Hand over*, *Take back*, *No-show?* or *Open*. The booking page `/staff/bookings/[id]` shows the customer, booking, scooter and ride, and offers only what is allowed right now, with the reason in plain words when nothing is. Scooters moved to `/staff/fleet` ("Scooters" in the console navigation).
-- **Manager/Admin (desktop):** cities, stations, fleet table + status, pricing plans, staff; dashboards in Phase 7.
+- **Manager/Admin (desktop):** cities, stations, fleet table + status, pricing plans, staff, and the overview dashboard (below).
 
 ## 8. Frontend structure
 ```
@@ -124,6 +124,11 @@ frontend/src/
 - **Hand over** form: the customer's 6-digit PIN, a checkbox "I have checked the customer's ID", odometer and battery at start, damage already on the scooter (add rows), and, if the booked scooter is faulty, a replacement of the same model with a reason. **Take back** form: return station (same city), odometer and battery at the end, new damage with a flat fee, "send to maintenance". **Mark as no-show** asks first and says what happens to the money (deposit refunded, rental kept).
 - The booking page shows a green banner after each action, the rental readings and damage records once there is a ride, and a **Refunded** row when money has gone back.
 - Customers see the ride states on both clients: *On a ride*, *Returned* (with the distance and return station) and *No-show*. Web: `/bookings/[id]`; app: booking detail. The desk itself is website-only.
+
+### Dashboards (2026-10-09)
+- **Overview (`/admin`)** for admins and managers: a time-range switch (24 hours / 7 days / 30 days), then four blocks: **Right now** (waiting for pickup, out on a ride and how many are late, owed by customers, refunds not sent, deposits held), **Fleet** (total, available, on a ride, maintenance, offline, and utilization), **Activity** for the range (new bookings, rides started and finished, cancellations, no-shows) and **Money** for the range (collected, refunded, net, with a note that net includes held deposits). Each number that has a list behind it links to that list. Below, a table with one row per city (admins; click a city to open its overview) or per station (managers and a city view). Managers with several cities get city tabs. Phones show two tiles per row and the tables become cards.
+- **Station desk (`/staff`)**: a strip above the queue with the station's waiting, out (and late), owed and refunds-not-sent numbers, shown for an employee's own station or the station picked in the filter.
+- **Customer home** (website `/`, app Home): a red *You owe ... Pay it to book again* banner when money is owed, the booking that needs attention (*Your booking*, *Finish your booking*, or *Coming up* for a future one), **Recent rides** (last 3, each opening its booking) with the totals (*9 rides · 92 km*). Signed-out visitors see the same page as before.
 
 ### Final bill and settlements (2026-10-08)
 - **Final bill** card on the booking page (website `<SettlementSummary>`, app `SettlementSummary`): deposit paid, each charge as its own line (extra distance, late return, damage, with quantity x rate when more than one), then one result line: *Refunded to you*, *Your refund is on its way*, *You owe*, *You paid* or *Nothing to refund*. Amounts come from the backend; clients never calculate money.

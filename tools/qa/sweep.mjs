@@ -26,7 +26,7 @@ const spec = (await j("GET", "/api/docs-json")).data;
 const uuid = "00000000-0000-4000-8000-000000000000";
 const publicPaths = new Set(["/api/v1/health", "/api/v1/auth/phone/request", "/api/v1/auth/phone/verify", "/api/v1/auth/phone/signup", "/api/v1/auth/login", "/api/v1/auth/refresh", "/api/v1/auth/logout", "/api/v1/cities", "/api/v1/cities/{cityId}/stations", "/api/v1/stations/{id}", "/api/v1/stations/{stationId}/vehicles", "/api/v1/vehicles/{id}", "/api/v1/bookings/quote"]);
 // Customer-only routes: a customer is allowed in (checked below that staff are not).
-const customerOnly = new Set(["/api/v1/kyc/status", "/api/v1/kyc/start", "/api/v1/bookings", "/api/v1/bookings/{id}", "/api/v1/bookings/{id}/pay", "/api/v1/bookings/{id}/cancel", "/api/v1/bookings/{id}/settlement", "/api/v1/bookings/{id}/settlement/pay"]);
+const customerOnly = new Set(["/api/v1/kyc/status", "/api/v1/kyc/start", "/api/v1/bookings", "/api/v1/bookings/{id}", "/api/v1/bookings/{id}/pay", "/api/v1/bookings/{id}/cancel", "/api/v1/bookings/{id}/settlement", "/api/v1/bookings/{id}/settlement/pay", "/api/v1/dashboard/customer"]);
 let routeCount = 0;
 for (const [path, methods] of Object.entries(spec.paths)) {
   for (const method of Object.keys(methods)) {
@@ -55,6 +55,14 @@ check("employee cannot create city", (await j("POST", "/api/v1/cities", { token:
 check("manager cannot create city", (await j("POST", "/api/v1/cities", { token: manager, body: { name: "x", state: "y" } })).status === 403);
 check("manager cannot create vehicle model", (await j("POST", "/api/v1/vehicle-models", { token: manager, body: { brand: "a", name: "b", rangeKm: 1, topSpeedKmh: 1 } })).status === 403);
 const blrStation = (await j("GET", "/api/v1/manage/stations?limit=100", { token: admin })).data.items.find((s) => s.name === "Indiranagar");
+check("manager cannot read the admin dashboard", (await j("GET", "/api/v1/dashboard/admin", { token: manager })).status === 403);
+check("employee cannot read the admin dashboard", (await j("GET", "/api/v1/dashboard/admin", { token: employee })).status === 403);
+check("employee cannot read a city dashboard", (await j("GET", `/api/v1/dashboard/city/${blrStation.cityId}`, { token: employee })).status === 403);
+check("manager (Hyderabad) cannot read the Bengaluru city dashboard", (await j("GET", `/api/v1/dashboard/city/${blrStation.cityId}`, { token: manager })).status === 403);
+check("manager (Hyderabad) cannot read a Bengaluru station dashboard", (await j("GET", `/api/v1/dashboard/station/${blrStation.id}`, { token: manager })).status === 403);
+check("employee can read their own station dashboard", (await j("GET", `/api/v1/dashboard/station/${blrStation.id}`, { token: employee })).status === 200);
+check("admin can read the admin dashboard", (await j("GET", "/api/v1/dashboard/admin", { token: admin })).status === 200);
+check("a bad dashboard range is a clean 400", (await j("GET", "/api/v1/dashboard/admin?range=forever", { token: admin })).status === 400);
 check("manager (Hyderabad) cannot create station in Bengaluru", (await j("POST", "/api/v1/stations", { token: manager, body: { cityId: blrStation.cityId, name: "Hack", address: "x", latitude: 1, longitude: 1, capacity: 1 } })).status === 403);
 
 // 3. Malformed / hostile input must give clean 4xx, never 5xx or stack traces.

@@ -47,6 +47,9 @@ class BookingApi {
         SettlementView.fromJson,
       );
 
+  /// The customer's home: active or next booking, recent rides, what they owe, totals.
+  Future<(CustomerDashboard?, ApiError?)> dashboard() => _one(api.get('/dashboard/customer'), CustomerDashboard.fromJson);
+
   Future<(BookingView?, ApiError?)> get(String id) => _one(api.get('/bookings/$id'), BookingView.fromJson);
 
   Future<(BookingView?, ApiError?)> cancel(String id) => _one(api.post('/bookings/$id/cancel'), BookingView.fromJson);

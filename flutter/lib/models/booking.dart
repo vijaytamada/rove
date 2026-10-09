@@ -324,3 +324,49 @@ enum BookingTab {
   final String label;
   final String empty;
 }
+
+/// What a customer owes for an earlier ride, and which booking it belongs to.
+class OwedAmount {
+  const OwedAmount({required this.bookingId, required this.amount});
+
+  final String bookingId;
+  final int amount;
+
+  factory OwedAmount.fromJson(Map<String, dynamic> json) =>
+      OwedAmount(bookingId: json['bookingId'] as String, amount: (json['amount'] as num).toInt());
+}
+
+/// A customer's home: what needs attention, what is next, recent rides, what they owe. Worked out by the backend.
+class CustomerDashboard {
+  const CustomerDashboard({
+    this.active,
+    this.upcoming,
+    this.recent = const [],
+    this.owed,
+    this.rides = 0,
+    this.distanceKm = 0,
+  });
+
+  final BookingView? active;
+  final BookingView? upcoming;
+  final List<BookingView> recent;
+  final OwedAmount? owed;
+  final int rides;
+  final double distanceKm;
+
+  /// The booking to show first: something active, else the next one.
+  BookingView? get next => active ?? upcoming;
+
+  factory CustomerDashboard.fromJson(Map<String, dynamic> json) {
+    BookingView? one(Object? v) => v == null ? null : BookingView.fromJson(v as Map<String, dynamic>);
+    final stats = json['stats'] as Map<String, dynamic>;
+    return CustomerDashboard(
+      active: one(json['active']),
+      upcoming: one(json['upcoming']),
+      recent: (json['recent'] as List).map((e) => BookingView.fromJson(e as Map<String, dynamic>)).toList(),
+      owed: json['owed'] == null ? null : OwedAmount.fromJson(json['owed'] as Map<String, dynamic>),
+      rides: (stats['rides'] as num).toInt(),
+      distanceKm: (stats['distanceKm'] as num).toDouble(),
+    );
+  }
+}
