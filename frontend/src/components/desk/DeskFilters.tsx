@@ -26,7 +26,7 @@ export function DeskFilters({
           type="search"
           name="q"
           defaultValue={q}
-          placeholder="Booking code, phone number or name"
+          placeholder="Code, phone or name"
           className="h-12 w-full rounded-control border border-line bg-surface pl-11 pr-4 text-base outline-none placeholder:text-ink-faint focus:border-ink"
         />
       </label>

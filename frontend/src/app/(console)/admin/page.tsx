@@ -68,7 +68,7 @@ export default async function AdminHome({ searchParams }: { searchParams: Promis
           </Link>
         </div>
         <p className="mt-4 text-sm text-ink-muted">
-          Reserved and in-ride counts appear once bookings and rentals arrive in later phases.
+          Reserved and in-ride counts arrive with the dashboards.
         </p>
       </Panel>
     </>

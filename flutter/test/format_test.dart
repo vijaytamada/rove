@@ -2,6 +2,12 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:rove_app/format.dart';
 
 void main() {
+  test('formatKm drops a pointless .0', () {
+    expect(formatKm(6.0), '6');
+    expect(formatKm(12.5), '12.5');
+    expect(formatKm(0), '0');
+  });
+
   group('formatMoney', () {
     test('shows whole rupees without decimals and uses Indian digit grouping', () {
       expect(formatMoney(0), '₹0');

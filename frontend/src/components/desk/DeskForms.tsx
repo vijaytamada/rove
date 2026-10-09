@@ -85,7 +85,7 @@ export function ReturnForm({ booking }: { booking: StaffBookingView }) {
           wide
           label="Returned to"
           name="returnStationId"
-          defaultValue={booking.returnStations[0]?.id}
+          defaultValue={(booking.returnStations.find((s) => s.id === booking.station.id) ?? booking.returnStations[0])?.id}
           options={booking.returnStations.map((s) => ({ value: s.id, label: s.name }))}
           required
           hint="Any station in the same city."
