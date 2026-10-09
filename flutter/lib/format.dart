@@ -1,6 +1,9 @@
 // Display helpers. Money is integer paise from the API; this is the only place it becomes text.
 // Times are shown on the city's clock (a pickup happens at a station), like on the website.
 
+/// 6.0 -> "6", 12.5 -> "12.5": a distance without a pointless ".0", like the website.
+String formatKm(double km) => km == km.roundToDouble() ? km.toInt().toString() : km.toString();
+
 /// 4900 -> "₹49", 10050 -> "₹100.50", 10000000 -> "₹1,00,000" (Indian digit grouping).
 String formatMoney(int paise) {
   final negative = paise < 0;

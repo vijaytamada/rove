@@ -15,7 +15,7 @@ const tabs = [
 export function BottomNav() {
   const pathname = usePathname();
   // Checkout pages have their own bottom bar (price + button); the tabs would cover it.
-  if (pathname.startsWith("/book/") || /^\/bookings\/[^/]+\/pay$/.test(pathname)) return null;
+  if (pathname.startsWith("/book/") || /^\/bookings\/[^/]+\/(pay|settle)$/.test(pathname)) return null;
   return (
     <nav
       aria-label="Primary"

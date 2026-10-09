@@ -147,7 +147,7 @@ class _BookingDetailScreenState extends State<BookingDetailScreen> {
         if ((b.status == BookingStatus.returned || b.status == BookingStatus.settled) && b.rental != null) ...[
           const SizedBox(height: 16),
           FormBanner.notice(
-              'Returned${b.rental!.returnStationName == null ? '' : ' to ${b.rental!.returnStationName}'}${b.rental!.distanceKm == null ? '' : ' after ${b.rental!.distanceKm} km'}.${settlement?.status == SettlementStatus.refundPending ? ' Your refund is on its way.' : ''}${settlement?.status == SettlementStatus.refunded ? ' ${formatMoney(settlement!.refundAmount)} of your deposit was refunded.' : ''}'),
+              'Returned${b.rental!.returnStationName == null ? '' : ' to ${b.rental!.returnStationName}'}${b.rental!.distanceKm == null ? '' : ' after ${formatKm(b.rental!.distanceKm!)} km'}.${settlement?.status == SettlementStatus.refundPending ? ' Your refund is on its way.' : ''}${settlement?.status == SettlementStatus.refunded ? ' ${formatMoney(settlement!.refundAmount)} of your deposit was refunded.' : ''}'),
         ],
         if (b.status == BookingStatus.noShow) ...[
           const SizedBox(height: 16),
