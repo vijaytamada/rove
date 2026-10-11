@@ -4,6 +4,7 @@ import { AppException } from '../../common/app-exception.js';
 import { CurrentUser, Public, Roles, type AuthUser } from '../../common/auth.decorators.js';
 import { BookingsService } from './bookings.service.js';
 import { CreateBookingDto, ListBookingsQuery, PayBookingDto, QuoteBookingDto } from './dto/booking.dto.js';
+import { RateLimit } from '../../infra/rate-limit/rate-limit.guard.js';
 
 @ApiTags('bookings')
 @Controller('bookings')
@@ -12,6 +13,7 @@ export class BookingsController {
 
   /** Price and availability for one scooter and window. Public, so people can see prices before signing in. */
   @Public()
+  @RateLimit('quote', 120, 60)
   @Post('quote')
   @HttpCode(200)
   quote(@Body() dto: QuoteBookingDto) {

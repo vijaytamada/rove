@@ -1,4 +1,7 @@
 import { ACCOUNTS, loginPhone } from "./env.mjs";
+import { execSync } from "node:child_process";
+// Counters from earlier runs (failed logins per email and per address, request rates) would lock this script out.
+for (const pattern of ["login:fail:*", "login:ip:*", "rl:*"]) execSync(`docker exec rove-redis sh -c "redis-cli --scan --pattern '${pattern}' | xargs -r redis-cli del"`, { stdio: "ignore" });
 // API security/robustness sweep against the running backend (http://localhost:3001).
 const BASE = "http://localhost:3001";
 const results = [];
@@ -24,7 +27,7 @@ const employee = await login("employee.indiranagar@rove.local", ACCOUNTS.manager
 // 1. Every route in the OpenAPI spec: unauthenticated and wrong-role behaviour.
 const spec = (await j("GET", "/api/docs-json")).data;
 const uuid = "00000000-0000-4000-8000-000000000000";
-const publicPaths = new Set(["/api/v1/health", "/api/v1/auth/phone/request", "/api/v1/auth/phone/verify", "/api/v1/auth/phone/signup", "/api/v1/auth/login", "/api/v1/auth/refresh", "/api/v1/auth/logout", "/api/v1/cities", "/api/v1/cities/{cityId}/stations", "/api/v1/stations/{id}", "/api/v1/stations/{stationId}/vehicles", "/api/v1/vehicles/{id}", "/api/v1/bookings/quote", "/api/v1/telemetry"]);
+const publicPaths = new Set(["/api/v1/health", "/api/v1/health/live", "/api/v1/health/ready", "/api/v1/auth/phone/request", "/api/v1/auth/phone/verify", "/api/v1/auth/phone/signup", "/api/v1/auth/login", "/api/v1/auth/refresh", "/api/v1/auth/logout", "/api/v1/cities", "/api/v1/cities/{cityId}/stations", "/api/v1/stations/{id}", "/api/v1/stations/{stationId}/vehicles", "/api/v1/vehicles/{id}", "/api/v1/bookings/quote", "/api/v1/telemetry"]);
 // Customer-only routes: a customer is allowed in (checked below that staff are not).
 const customerOnly = new Set(["/api/v1/kyc/status", "/api/v1/kyc/start", "/api/v1/bookings", "/api/v1/bookings/{id}", "/api/v1/bookings/{id}/pay", "/api/v1/bookings/{id}/cancel", "/api/v1/bookings/{id}/settlement", "/api/v1/bookings/{id}/settlement/pay", "/api/v1/dashboard/customer"]);
 let routeCount = 0;

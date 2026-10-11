@@ -2,7 +2,8 @@ import { ACCOUNTS, loginPhone } from "./env.mjs";
 // Page-by-role matrix against the running website (http://localhost:3000) and API (http://localhost:3001).
 import { execSync } from "node:child_process";
 const WEB = "http://localhost:3000", API = "http://localhost:3001/api/v1";
-execSync(`docker exec rove-redis sh -c "redis-cli --scan --pattern 'login:fail:*' | xargs -r redis-cli del"`, { stdio: "ignore" });
+// Failed-login counters (per email and per address) and request-rate counters from earlier runs would lock the scripts out.
+for (const pattern of ["login:fail:*", "login:ip:*", "rl:*"]) execSync(`docker exec rove-redis sh -c "redis-cli --scan --pattern '${pattern}' | xargs -r redis-cli del"`, { stdio: "ignore" });
 
 const login = async (email, password) => {
   const r = await (await fetch(API + "/auth/login", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email, password }) })).json();

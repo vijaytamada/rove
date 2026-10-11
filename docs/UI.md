@@ -130,6 +130,9 @@ frontend/src/
 - **Station desk (`/staff`)**: a strip above the queue with the station's waiting, out (and late), owed and refunds-not-sent numbers, shown for an employee's own station or the station picked in the filter.
 - **Customer home** (website `/`, app Home): a red *You owe ... Pay it to book again* banner when money is owed, the booking that needs attention (*Your booking*, *Finish your booking*, or *Coming up* for a future one), **Recent rides** (last 3, each opening its booking) with the totals (*9 rides · 92 km*). Signed-out visitors see the same page as before.
 
+### Form errors (2026-10-11)
+- A field's error (for example *That PIN doesn't match this booking*) disappears as soon as the person edits that field; the next submit shows a new error if there still is one. Applies to every admin and desk form (`<Field>`).
+
 ### Live map (2026-10-11, website only)
 - **Live map** (`/staff/map`, in every staff member's console navigation): an OpenStreetMap map of the scooters and stations the user may see, refreshed every 5 seconds (paused while the tab is hidden). Stations are white squares; scooters are dots coloured by status (green available, black on a ride, blue reserved, amber maintenance, grey offline), faded when the tracker has gone quiet. A panel shows the count per status and a list of scooters on a ride with speed, battery and how long ago they reported; picking one flies to it, rings it and draws its recent path (refreshed with the map). A scooter that is brought back is dropped from the selection. If the session ends, the map says so and offers *Reload*. The map data comes through the website's own route (`/api/live-fleet`), so the browser never holds the token. Console-only, so the app has no counterpart (the app is customer-only and customers do not see scooter positions).
 

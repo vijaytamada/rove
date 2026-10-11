@@ -33,6 +33,9 @@ export class HttpExceptionFilter implements ExceptionFilter {
 
   catch(exception: unknown, host: ArgumentsHost) {
     const res = host.switchToHttp().getResponse<Response>();
+    // Support can find the matching log line from this id (it is also in the X-Request-Id header).
+    const rid = res.getHeader?.('x-request-id');
+    const requestId = typeof rid === 'string' ? { requestId: rid } : {};
 
     if (!(exception instanceof HttpException)) {
       const status = clientErrorStatus(exception);
@@ -44,7 +47,7 @@ export class HttpExceptionFilter implements ExceptionFilter {
             : type === 'entity.parse.failed'
               ? 'The request body is not valid JSON.'
               : 'The request could not be processed.';
-        res.status(status).json({ statusCode: status, code: DEFAULT_CODES[status] ?? 'BAD_REQUEST', message });
+        res.status(status).json({ statusCode: status, code: DEFAULT_CODES[status] ?? 'BAD_REQUEST', message, ...requestId });
         return;
       }
       this.logger.error(exception instanceof Error ? (exception.stack ?? exception.message) : String(exception));
@@ -52,6 +55,7 @@ export class HttpExceptionFilter implements ExceptionFilter {
         statusCode: 500,
         code: 'INTERNAL_ERROR',
         message: 'Something went wrong. Try again.',
+        ...requestId,
       });
       return;
     }
@@ -81,6 +85,6 @@ export class HttpExceptionFilter implements ExceptionFilter {
       message = 'The request body is not valid JSON.';
     }
 
-    res.status(status).json({ statusCode: status, code, message, ...(details !== undefined && { details }) });
+    res.status(status).json({ statusCode: status, code, message, ...(details !== undefined && { details }), ...requestId });
   }
 }

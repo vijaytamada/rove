@@ -4,7 +4,8 @@ REST + JSON, prefix `/api/v1`, Swagger UI at `/api/docs`, OpenAPI JSON at `/api/
 
 ## Conventions
 - Auth: `Authorization: Bearer <accessJWT>`. Public endpoints are explicitly marked `@Public()`.
-- Errors: `{ "statusCode": 409, "code": "VEHICLE_NOT_AVAILABLE", "message": "...", "details": {} }`. `code` is stable.
+- Errors: `{ "statusCode": 409, "code": "VEHICLE_NOT_AVAILABLE", "message": "...", "details": {}, "requestId": "..." }`. `code` is stable. `requestId` is the same id as the `X-Request-Id` response header (send your own `X-Request-Id`, 8-64 letters, digits, `.`, `_` or `-`, to trace a call); quote it to support and it finds the log line.
+- Rate limits: some public routes count calls per client IP and answer **429 `RATE_LIMITED`** with a `Retry-After` header (seconds) when the limit is passed: price quote 120 per minute, browsing (cities, stations, scooters) 300 per minute, phone-code requests 20 per hour, code checks 60 per 15 minutes, sign-ups 20 per hour, token refresh 120 per minute, the identity webhook 300 per minute. Staff sign-in also counts failures per IP address (50 per 15 minutes across all emails) on top of the 10 per email, answering 429 `TOO_MANY_ATTEMPTS`. See *Phase 12* below.
 - Pagination: `?page=1&limit=20` → `{ items, total, page, limit }`.
 - Money: integer paise, field names suffixed `Amount`/`Fee`; currency implied `INR`.
 - Dates: ISO-8601 UTC.
@@ -180,8 +181,18 @@ Where each scooter is and how it is doing. Readings come from a tracker (or the 
 
 **Providers** (`TELEMETRY_PROVIDER`): `mock` does nothing (readings only through `POST /telemetry`), `simulator` makes them up for development (a scooter on a ride moves at 10-32 km/h along a wandering path and reports every 10 seconds, odometer and battery follow the distance; parked scooters report a heartbeat every 5 minutes; refused in production). A real device gateway (Phase 12) calls the same ingest. The database also refuses impossible readings (CHECK constraints). The minute job deletes readings past the retention period. Codes added: `INVALID_DEVICE_KEY`.
 
-### Phase 12 (still to come)
-`POST /webhooks/payments` (Phase 10, waiting on the gateway choice) · lock/unlock endpoints — designed in their phases.
+### Phase 12 - hardening and production readiness (first half)
+| Route | Who | What it does |
+|---|---|---|
+| `GET /health/live` | public | `{ status: 'ok' }` while the process runs. Checks nothing else: a container platform restarts the container when it fails |
+| `GET /health/ready` | public | The same report as `/health`, but 503 `NOT_READY` (with `details: { database, redis }`) while the database or Redis is down, so a load balancer stops sending traffic |
+
+**Limits and the client IP.** The counters live in Redis (`rl:<name>:<ip>`, fixed windows; if Redis is down the call is let through and a warning is logged). The IP is `req.ip`. Behind `N` reverse proxies set `TRUST_PROXY=N` (default 0 = clients connect directly) and Express takes the address the Nth proxy saw in `X-Forwarded-For`, so a client cannot dodge a limit by adding fake addresses in front. The website's server passes the visitor's address on in `X-Forwarded-For` (taken from the proxy in front of the website), which only works when that proxy overwrites the header itself. `RATE_LIMIT_ENABLED=false` switches the counters off (load tests only).
+
+**Operations switches** (environment): `SWAGGER_ENABLED` (the `/api/docs` page is off in production unless `true`), `LOG_FORMAT` (`json` = one JSON object per line, the default in production; `pretty` otherwise). In JSON mode every request logs one line `{ msg: 'request', requestId, method, route, status, ms, userId? }` with the route pattern, never the real URL, query string, headers or body. In production `CORS_ORIGIN` must be the real website address (localhost is refused at start-up). Codes added: `RATE_LIMITED`, `NOT_READY`.
+
+### Later
+`POST /webhooks/payments` (Phase 10, waiting on the gateway choice) · lock/unlock endpoints (Phase 12 second half, waiting on hardware choices).
 
 ## Access
 Per-endpoint role/scope rules: see `docs/RBAC.md`.

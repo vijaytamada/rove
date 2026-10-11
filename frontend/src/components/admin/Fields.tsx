@@ -1,6 +1,6 @@
 "use client";
 
-import type { InputHTMLAttributes } from "react";
+import { useState, type InputHTMLAttributes } from "react";
 import { useFormResult } from "./ActionForm";
 
 const inputClass = (error?: string) =>
@@ -49,9 +49,11 @@ interface FieldProps extends Omit<InputHTMLAttributes<HTMLInputElement>, "name">
 }
 
 /** Text/number input inside an <ActionForm>: shows field errors and keeps values after a failed submit. */
-export function Field({ label, name, hint, wide, defaultValue, ...input }: FieldProps) {
+export function Field({ label, name, hint, wide, defaultValue, onChange, ...input }: FieldProps) {
   const result = useFormResult();
-  const error = result.fieldErrors?.[name];
+  // Once the person starts correcting the value, its old error goes away; the next submit brings a new result (and maybe a new error).
+  const [editedAfter, setEditedAfter] = useState<unknown>(null);
+  const error = editedAfter === result ? undefined : result.fieldErrors?.[name];
   return (
     <Wrapper label={label} name={name} error={error} hint={hint} wide={wide}>
       <input
@@ -61,6 +63,10 @@ export function Field({ label, name, hint, wide, defaultValue, ...input }: Field
         aria-invalid={error ? true : undefined}
         aria-describedby={error ? `${name}-error` : undefined}
         className={inputClass(error)}
+        onChange={(e) => {
+          setEditedAfter(result);
+          onChange?.(e);
+        }}
         {...input}
       />
     </Wrapper>

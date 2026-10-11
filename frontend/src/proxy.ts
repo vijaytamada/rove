@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { AUTH_PAGES, homeFor, loginPathFor, ruleFor } from "@/lib/access";
 import { API_URL } from "@/lib/config";
+import { contentSecurityPolicy } from "@/lib/csp";
 import { ACCESS_COOKIE, REFRESH_COOKIE, REFRESH_MAX_AGE, cookieOptions } from "@/lib/cookie-config";
 import type { AuthResult, Role } from "@/lib/types";
 
@@ -58,6 +59,15 @@ export async function proxy(request: NextRequest) {
 
   const rule = ruleFor(pathname);
   let response: NextResponse;
+  const nonce = btoa(crypto.randomUUID());
+  const csp = contentSecurityPolicy(nonce, process.env.NODE_ENV === "development");
+  /** The request as the page will see it: Next.js reads the nonce from the policy and puts it on its scripts. */
+  const withPolicy = (base: Headers) => {
+    const h = new Headers(base);
+    h.set("x-nonce", nonce);
+    h.set("Content-Security-Policy", csp);
+    return h;
+  };
 
   if (rule && !claims) {
     const url = new URL(loginPathFor(pathname), request.url);
@@ -69,7 +79,7 @@ export async function proxy(request: NextRequest) {
     response = NextResponse.redirect(new URL(homeFor(claims.role), request.url));
   } else if (renewed) {
     // Let the rest of this request see the new access token.
-    const headers = new Headers(request.headers);
+    const headers = withPolicy(request.headers);
     const cookies = request.cookies
       .getAll()
       .filter((c) => c.name !== ACCESS_COOKIE && c.name !== REFRESH_COOKIE)
@@ -78,8 +88,9 @@ export async function proxy(request: NextRequest) {
     headers.set("cookie", cookies.join("; "));
     response = NextResponse.next({ request: { headers } });
   } else {
-    response = NextResponse.next();
+    response = NextResponse.next({ request: { headers: withPolicy(request.headers) } });
   }
+  response.headers.set("Content-Security-Policy", csp);
 
   if (renewed) {
     response.cookies.set(ACCESS_COOKIE, renewed.accessToken, { ...cookieOptions, maxAge: renewed.expiresIn });

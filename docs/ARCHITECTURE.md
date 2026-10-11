@@ -93,11 +93,13 @@ Transitions are implemented in one service method each, inside a DB transaction,
 - **Validation:** global `ValidationPipe` (whitelist, forbid unknown).
 - **Errors:** uniform JSON `{ statusCode, code, message, details? }`; stable `code` strings for the frontend.
 - **Pagination:** `?page&limit` (default 20, max 100) → `{ items, total, page, limit }`.
-- **Redis:** Phase 1 connection only. Used for OTP attempt counters/rate limits (2/9), latest telemetry (11), queues if needed (8).
-- **Logging:** Nest logger w/ request id; structured JSON in Phase 12.
+- **Redis:** OTP attempt counters and send caps, login failure counters, per-IP request limits (`rl:*`), the minute job's lock, the newest telemetry reading per scooter. No data lives only in Redis that cannot be rebuilt.
+- **Logging and tracing:** every request gets an id (`X-Request-Id`, also in error bodies); in production the logs are JSON lines (one per request with the route pattern, status, duration and user id, plus the application's own messages) for a log collector. Health: `/health` (report), `/health/live`, `/health/ready` (503 when a dependency is down).
+- **Abuse limits:** `infra/rate-limit` (Redis counters, `@RateLimit(name, limit, windowSeconds)` on a route, applied by a global guard that runs before authentication), plus the per-email and per-IP sign-in throttles and the one-time-code limits. The client IP honours `TRUST_PROXY`.
+- **Web security headers:** a per-request nonce Content-Security-Policy from the website's proxy (`src/proxy.ts`, `src/lib/csp.ts`), plus `X-Frame-Options`, `nosniff`, `Referrer-Policy`, `Permissions-Policy` and HSTS (`next.config.ts`).
 - **Testing:** unit (engine, state machines), e2e with a test Postgres (Docker), no mocks of Prisma for business flows.
 - **Frontend:** Next.js App Router, typed API client (generated from OpenAPI when stable), role-based layouts: `(public)`, `(customer)`, `(staff)`, `(admin)`.
 - **Multi-vehicle future:** `Vehicle.type` + `VehicleModel`; pricing plan keyed by model; type-specific attributes live on `VehicleModel` (or a JSON `specs` column) rather than as `Vehicle` columns.
 
 ## 9. Local infra (Phase 1)
-`infra/docker-compose.yml`: `postgres:16`, `redis:7` (email was not built in Phase 8, so no `mailpit`). Backend/frontend run on host via npm in dev; containerizing them is a Phase 12 concern.
+`infra/docker-compose.yml`: `postgres:16`, `redis:7` (email was not built in Phase 8, so no `mailpit`). Backend/frontend run on host via npm in dev. For a production-style stack see `infra/docker-compose.prod.yml` (Postgres, Redis, a one-off migration job, the API and the website; images from `backend/Dockerfile` and `frontend/Dockerfile`); TLS and the public entry point are the operator's reverse proxy.

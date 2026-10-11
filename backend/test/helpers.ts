@@ -81,7 +81,21 @@ export async function createTestApp(): Promise<TestApp> {
   const prisma = app.get(PrismaService);
   const redis = app.get(RedisService);
   const passwords = app.get(PasswordService);
-  const http = () => request(app.getHttpServer());
+  // Each request comes from its own made-up address (2001:db8::/32 is reserved for documentation), as a real crowd would,
+  // so the per-IP limits do not add up across unrelated tests. A test can still set X-Forwarded-For itself to override it.
+  const randomClientIp = () => `2001:db8:${Math.floor(Math.random() * 0xffff).toString(16)}:${Math.floor(Math.random() * 0xffff).toString(16)}::1`;
+  const http = () => {
+    const agent = request(app.getHttpServer());
+    const methods = ['get', 'post', 'put', 'patch', 'delete'] as const;
+    return new Proxy(agent, {
+      get(target, prop) {
+        if ((methods as readonly (string | symbol)[]).includes(prop)) {
+          return (...args: unknown[]) => (target[prop as (typeof methods)[number]] as (...a: unknown[]) => request.Test)(...args).set('X-Forwarded-For', randomClientIp());
+        }
+        return Reflect.get(target, prop);
+      },
+    });
+  };
   const short = () => randomUUID().slice(0, 8);
   const phone = () => `${PHONE_PREFIX}${String(Math.floor(Math.random() * 1e7)).padStart(7, '0')}`;
 
@@ -209,6 +223,11 @@ export async function createTestApp(): Promise<TestApp> {
       const keys = [
         ...(await redis.client.keys(`otp:*${PHONE_PREFIX}*`)),
         ...(await redis.client.keys(`login:fail:${PREFIX}*`)),
+        // Fake client addresses the hardening tests use (203.0.113.0/24 is reserved for documentation).
+        ...(await redis.client.keys('rl:*:203.0.113.*')),
+        ...(await redis.client.keys('login:ip:203.0.113.*')),
+        ...(await redis.client.keys('rl:*:2001:db8:*')),
+        ...(await redis.client.keys('login:ip:2001:db8:*')),
         ...users.flatMap((u) => [`otp:verify:${u.id}`, `otp:cooldown:verify:${u.id}`]),
       ];
       if (keys.length) await redis.client.del(...keys);

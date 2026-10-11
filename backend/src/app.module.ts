@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { validateEnv } from './config/env.js';
 import { PrismaModule } from './infra/prisma/prisma.module.js';
+import { RateLimitModule } from './infra/rate-limit/rate-limit.module.js';
 import { RedisModule } from './infra/redis/redis.module.js';
 import { BookingsModule } from './modules/bookings/bookings.module.js';
 import { CitiesModule } from './modules/cities/cities.module.js';
@@ -30,6 +31,8 @@ import { UsersModule } from './modules/users/users.module.js';
     }),
     PrismaModule,
     RedisModule,
+    // Before RbacModule: its guard must run first, so floods are refused before anything else is checked.
+    RateLimitModule,
     RbacModule,
     AuditModule,
     UsersModule,
