@@ -43,3 +43,6 @@ infra/production.env
 
 # Load-test working files (server log, pid, fixtures, results)
 tools/load/.run/
+
+# Android bug reports
+flutter/bugreport-*.zip
