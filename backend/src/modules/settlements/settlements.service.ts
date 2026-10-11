@@ -153,6 +153,7 @@ export class SettlementsService {
   async forCustomer(user: AuthUser, bookingId: string): Promise<SettlementView> {
     const s = await this.prisma.settlement.findFirst({
       where: { bookingId, booking: { is: { userId: user.id } } },
+      relationLoadStrategy: 'join',
       include: SETTLEMENT_INCLUDE,
     });
     if (!s) throw new AppException(404, 'SETTLEMENT_NOT_FOUND', 'There is no final bill for this booking yet.');
@@ -195,7 +196,7 @@ export class SettlementsService {
     };
     const { page, limit, skip, take } = pageArgs(query);
     const [rows, total] = await this.prisma.$transaction([
-      this.prisma.settlement.findMany({ where, include: STAFF_INCLUDE, orderBy: { createdAt: 'asc' }, skip, take }),
+      this.prisma.settlement.findMany({ where, relationLoadStrategy: 'join', include: STAFF_INCLUDE, orderBy: { createdAt: 'asc' }, skip, take }),
       this.prisma.settlement.count({ where }),
     ]);
     return { items: rows.map(toStaffView), total, page, limit };
@@ -241,7 +242,7 @@ export class SettlementsService {
     if (idempotencyKey) {
       const replay = await this.prisma.payment.findUnique({ where: { idempotencyKey } });
       if (replay) {
-        const s = await this.prisma.settlement.findUnique({ where: { id: settlementId }, include: SETTLEMENT_INCLUDE });
+        const s = await this.prisma.settlement.findUnique({ where: { id: settlementId }, relationLoadStrategy: 'join', include: SETTLEMENT_INCLUDE });
         if (!s || replay.bookingId !== s.bookingId || replay.purpose !== 'OUTSTANDING') {
           throw new AppException(409, 'IDEMPOTENCY_KEY_REUSED', 'This key was used for a different payment.');
         }
@@ -300,13 +301,13 @@ export class SettlementsService {
       await tx.payment.update({ where: { id: payment.id }, data: { status: 'SUCCEEDED', providerRef: charge.providerRef, paidAt } });
       await tx.settlement.updateMany({ where: { id: settlementId, status: 'OUTSTANDING' }, data: { status: 'CLEARED', clearedAt: paidAt } });
     });
-    const done = await this.prisma.settlement.findUniqueOrThrow({ where: { id: settlementId }, include: SETTLEMENT_INCLUDE });
+    const done = await this.prisma.settlement.findUniqueOrThrow({ where: { id: settlementId }, relationLoadStrategy: 'join', include: SETTLEMENT_INCLUDE });
     await this.events.paymentReceived(done.bookingId, payment.chargeAmount);
     return toSettlementView(done);
   }
 
   private async loadForStaff(user: AuthUser, id: string): Promise<StaffSettlementRow> {
-    const row = await this.prisma.settlement.findUnique({ where: { id }, include: STAFF_INCLUDE });
+    const row = await this.prisma.settlement.findUnique({ where: { id }, relationLoadStrategy: 'join', include: STAFF_INCLUDE });
     const access = await this.stationAccess(user);
     const stations = row ? [row.booking.station, ...(row.booking.rental?.returnStation ? [row.booking.rental.returnStation] : [])] : [];
     // Not found rather than forbidden: staff of other stations cannot tell the bill exists.

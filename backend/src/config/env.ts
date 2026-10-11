@@ -6,6 +6,8 @@ const envSchema = z
     PORT: z.coerce.number().int().positive().default(3001),
     DATABASE_URL: z.string().min(1),
     REDIS_URL: z.string().min(1),
+    /** Most database connections this process keeps open (Postgres allows 100 in total by default, shared by every process). */
+    DB_POOL_MAX: z.coerce.number().int().min(1).max(100).default(10),
     CORS_ORIGIN: z.string().default('http://localhost:3000'),
 
     JWT_ACCESS_SECRET: z.string().min(16, 'must be at least 16 characters'),
@@ -30,6 +32,10 @@ const envSchema = z
       .enum(['true', 'false'])
       .default('true')
       .transform((v) => v === 'true'),
+    /** Scales every per-IP request limit (2 = twice as many). Raise it when many real users share one address, e.g. mobile carriers. */
+    RATE_LIMIT_MULTIPLIER: z.coerce.number().min(0.1).max(100).default(1),
+    /** Dashboards may show numbers this many seconds old, and a crowd opening one shares a single computation. 0 = always fresh. */
+    DASHBOARD_CACHE_SECONDS: z.coerce.number().min(0).max(300).default(10),
     /** How many reverse proxies sit in front of the API (0 = none, clients connect directly). Decides which address is "the client's IP". */
     TRUST_PROXY: z.coerce.number().int().min(0).max(5).default(0),
     /** The Swagger UI at /api/docs. Off in production unless set to true. */

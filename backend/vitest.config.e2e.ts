@@ -7,7 +7,7 @@ export default defineConfig({
   test: {
     globals: true,
     // Tests call the job directly; the minute timer must not run underneath them.
-    env: { JOBS_ENABLED: 'false', TELEMETRY_PROVIDER: 'mock', TRUST_PROXY: '1' },
+    env: { JOBS_ENABLED: 'false', TELEMETRY_PROVIDER: 'mock', TRUST_PROXY: '1', DASHBOARD_CACHE_SECONDS: '0' },
     root: './',
     include: ['test/**/*.e2e-spec.ts'],
     // e2e tests share one database; run files one at a time.

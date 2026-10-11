@@ -189,6 +189,8 @@ Where each scooter is and how it is doing. Readings come from a tracker (or the 
 
 **Limits and the client IP.** The counters live in Redis (`rl:<name>:<ip>`, fixed windows; if Redis is down the call is let through and a warning is logged). The IP is `req.ip`. Behind `N` reverse proxies set `TRUST_PROXY=N` (default 0 = clients connect directly) and Express takes the address the Nth proxy saw in `X-Forwarded-For`, so a client cannot dodge a limit by adding fake addresses in front. The website's server passes the visitor's address on in `X-Forwarded-For` (taken from the proxy in front of the website), which only works when that proxy overwrites the header itself. `RATE_LIMIT_ENABLED=false` switches the counters off (load tests only).
 
+**Behaviour worth knowing:** a scooter that is out on a ride answers **409 `VEHICLE_NOT_AVAILABLE`** to a quote or a booking (404 `VEHICLE_NOT_FOUND` is only for one that does not exist or is retired). The dashboard endpoints may show numbers up to `DASHBOARD_CACHE_SECONDS` (default 10) old; the lists, desk, settlements and live fleet are always fresh. `RATE_LIMIT_MULTIPLIER` scales every limit above.
+
 **Operations switches** (environment): `SWAGGER_ENABLED` (the `/api/docs` page is off in production unless `true`), `LOG_FORMAT` (`json` = one JSON object per line, the default in production; `pretty` otherwise). In JSON mode every request logs one line `{ msg: 'request', requestId, method, route, status, ms, userId? }` with the route pattern, never the real URL, query string, headers or body. In production `CORS_ORIGIN` must be the real website address (localhost is refused at start-up). Codes added: `RATE_LIMITED`, `NOT_READY`.
 
 ### Later

@@ -24,7 +24,8 @@ function fakeRedis(opts: { failWith?: Error } = {}) {
   };
   return { redis: { client } as unknown as RedisService, counts, ttls, calls };
 }
-const config = (enabled: boolean) => ({ get: () => enabled }) as unknown as ConfigService<Env, true>;
+const config = (enabled: boolean, multiplier = 1) =>
+  ({ get: (key: string) => (key === 'RATE_LIMIT_MULTIPLIER' ? multiplier : enabled) }) as unknown as ConfigService<Env, true>;
 
 describe('RateLimitService', () => {
   it('allows up to the limit, then refuses, and counts down what is left', async () => {
@@ -56,6 +57,20 @@ describe('RateLimitService', () => {
     counts.set('rl:y:ip', 7);
     await limiter.hit('y', 'ip', 5, 30);
     expect(ttls.get('rl:y:ip')).toBe(30);
+  });
+
+  it('scales every limit by the multiplier', async () => {
+    const { redis } = fakeRedis();
+    const doubled = new RateLimitService(redis, config(true, 2));
+    const results = [];
+    for (let i = 0; i < 5; i++) results.push((await doubled.hit('x', 'ip', 2, 60)).allowed);
+    expect(results).toEqual([true, true, true, true, false]);
+    const { redis: r2 } = fakeRedis();
+    const halved = new RateLimitService(r2, config(true, 0.5));
+    expect((await halved.hit('x', 'ip', 4, 60)).limit).toBe(2);
+    // Never below one call.
+    const { redis: r3 } = fakeRedis();
+    expect((await new RateLimitService(r3, config(true, 0.1)).hit('x', 'ip', 3, 60)).limit).toBe(1);
   });
 
   it('does nothing when switched off', async () => {

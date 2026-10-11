@@ -21,15 +21,18 @@ export interface RateLimitResult {
 export class RateLimitService {
   private readonly logger = new Logger(RateLimitService.name);
   private readonly enabled: boolean;
+  private readonly multiplier: number;
 
   constructor(
     @Inject(RedisService) private readonly redis: RedisService,
     @Inject(ConfigService) config: ConfigService<Env, true>,
   ) {
     this.enabled = config.get('RATE_LIMIT_ENABLED', { infer: true });
+    this.multiplier = config.get('RATE_LIMIT_MULTIPLIER', { infer: true });
   }
 
-  async hit(name: string, subject: string, limit: number, windowSeconds: number): Promise<RateLimitResult> {
+  async hit(name: string, subject: string, baseLimit: number, windowSeconds: number): Promise<RateLimitResult> {
+    const limit = Math.max(1, Math.round(baseLimit * this.multiplier));
     if (!this.enabled) return { allowed: true, limit, remaining: limit, retryAfterSeconds: 0 };
     const key = `rl:${name}:${subject}`;
     try {

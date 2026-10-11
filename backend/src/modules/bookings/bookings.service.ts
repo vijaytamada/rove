@@ -139,6 +139,7 @@ export class BookingsService {
               totalAmount: quote.totalAmount,
               pricingSnapshot: quote.pricing as unknown as Prisma.InputJsonValue,
             },
+            relationLoadStrategy: 'join',
             include: BOOKING_INCLUDE,
           });
         });
@@ -264,11 +265,13 @@ export class BookingsService {
 
   async list(user: AuthUser, query: ListBookingsQuery, now = new Date()): Promise<Page<BookingView>> {
     await this.expireHolds(user.id, now);
-    const where: Prisma.BookingWhereInput = { userId: user.id, ...(query.tab && tabFilter(query.tab, now)) };
+    const owed = query.tab ? await this.owedBookingIds(user.id) : [];
+    const where: Prisma.BookingWhereInput = { userId: user.id, ...(query.tab && tabFilter(query.tab, now, owed)) };
     const { page, limit, skip, take } = pageArgs(query);
     const [rows, total] = await this.prisma.$transaction([
       this.prisma.booking.findMany({
         where,
+        relationLoadStrategy: 'join',
         include: BOOKING_INCLUDE,
         orderBy: query.tab === 'past' || !query.tab ? { startAt: 'desc' } : { startAt: 'asc' },
         skip,
@@ -277,6 +280,26 @@ export class BookingsService {
       this.prisma.booking.count({ where }),
     ]);
     return { items: rows.map((r) => toBookingView(r, this.pinSecret, now)), total, page, limit };
+  }
+
+  /**
+   * The three things the customer's home shows: a booking that needs attention, the next paid one, and the last three finished.
+   * Three reads and no paging totals (the home never shows how many there are), after expiring runaway holds once.
+   */
+  async homeBookings(user: AuthUser, now = new Date()): Promise<{ active: BookingView | null; upcoming: BookingView | null; recent: BookingView[] }> {
+    await this.expireHolds(user.id, now);
+    const owed = await this.owedBookingIds(user.id);
+    const find = (tab: BookingTab, take: number) =>
+      this.prisma.booking.findMany({
+        where: { userId: user.id, ...tabFilter(tab, now, owed) },
+        relationLoadStrategy: 'join',
+        include: BOOKING_INCLUDE,
+        orderBy: tab === 'past' ? { startAt: 'desc' } : { startAt: 'asc' },
+        take,
+      });
+    const [active, upcoming, recent] = await Promise.all([find('active', 1), find('upcoming', 1), find('past', 3)]);
+    const view = (row: (typeof active)[number]) => toBookingView(row, this.pinSecret, now);
+    return { active: active[0] ? view(active[0]) : null, upcoming: upcoming[0] ? view(upcoming[0]) : null, recent: recent.map(view) };
   }
 
   async get(user: AuthUser, id: string): Promise<BookingView> {
@@ -328,6 +351,10 @@ export class BookingsService {
       include: { model: true, station: { include: { city: true } } },
     });
     const station = vehicle?.station;
+    // A scooter that is out on a ride has no station: it exists, it just cannot be rented now (not "not found").
+    if (vehicle && !station && vehicle.status === 'IN_RIDE') {
+      throw new AppException(409, 'VEHICLE_NOT_AVAILABLE', 'This scooter is not available to rent.');
+    }
     if (!vehicle || !station || station.status !== 'ACTIVE' || !station.city.isActive || !vehicle.model.isActive) {
       throw new AppException(404, 'VEHICLE_NOT_FOUND', 'Scooter not found.');
     }
@@ -370,13 +397,25 @@ export class BookingsService {
   }
 
   private async ownBooking(userId: string, id: string): Promise<BookingRow> {
-    const booking = await this.prisma.booking.findFirst({ where: { id, userId }, include: BOOKING_INCLUDE });
+    const booking = await this.prisma.booking.findFirst({ where: { id, userId }, relationLoadStrategy: 'join', include: BOOKING_INCLUDE });
     if (!booking) throw new AppException(404, 'BOOKING_NOT_FOUND', 'Booking not found.');
     return booking;
   }
 
   private async view(userId: string, id: string): Promise<BookingView> {
     return toBookingView(await this.ownBooking(userId, id), this.pinSecret, new Date());
+  }
+
+  /**
+   * The customer's bookings whose final bill still has money owed. Asked once, up front, so the lists can filter by id: a
+   * relation filter inside an OR makes the database join the whole Settlement table for every list.
+   */
+  private async owedBookingIds(userId: string): Promise<string[]> {
+    const rows = await this.prisma.settlement.findMany({
+      where: { status: 'OUTSTANDING', booking: { is: { userId } } },
+      select: { bookingId: true },
+    });
+    return rows.map((r) => r.bookingId);
   }
 
   /** Marks this customer's runaway payment holds EXPIRED so lists and details never show them as live. */
@@ -396,7 +435,7 @@ export class BookingsService {
   }
 }
 
-function tabFilter(tab: BookingTab, now: Date): Prisma.BookingWhereInput {
+function tabFilter(tab: BookingTab, now: Date, owedIds: string[]): Prisma.BookingWhereInput {
   switch (tab) {
     case 'active':
       return {
@@ -405,7 +444,7 @@ function tabFilter(tab: BookingTab, now: Date): Prisma.BookingWhereInput {
           { status: 'IN_RIDE' },
           { status: 'CONFIRMED', startAt: { lte: now } },
           // Money still owed for the ride needs the customer's attention.
-          { status: 'SETTLED', settlement: { is: { status: 'OUTSTANDING' } } },
+          { status: 'SETTLED', id: { in: owedIds } },
         ],
       };
     case 'upcoming':
@@ -413,7 +452,7 @@ function tabFilter(tab: BookingTab, now: Date): Prisma.BookingWhereInput {
     case 'past':
       return {
         status: { in: ['RETURNED', 'SETTLED', 'CANCELLED', 'EXPIRED', 'NO_SHOW'] },
-        NOT: { settlement: { is: { status: 'OUTSTANDING' } } },
+        NOT: { id: { in: owedIds } },
       };
   }
 }
