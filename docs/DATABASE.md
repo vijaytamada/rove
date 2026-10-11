@@ -30,13 +30,13 @@ PostgreSQL via Prisma. This lists expected entities and purpose only. Detailed c
 | **DamageRecord** | 5 | Rental FK, phase (`PICKUP`/`RETURN`), description, severity, fee amount, photo URLs |
 | **Settlement** | 6 | Booking FK (1:1), deposit held, total charges, refund amount, outstanding amount, status (`REFUND_PENDING`, `REFUNDED`, `OUTSTANDING`, `CLEARED`, `NO_ACTION`), `settledAt`, `clearedAt` |
 | **SettlementLineItem** | 6 | Settlement FK, type (`EXTRA_KM`, `LATE_FEE`, `DAMAGE`), description, quantity (started km or hours; 1 for damage), unit amount, amount |
-| **Notification** | 8 | Recipient, channel, template, payload, status, sentAt |
+| **Notification** | 8 | User FK (cascade), `type` (`BOOKING_CONFIRMED`, `BOOKING_CANCELLED`, `BOOKING_EXPIRED`, `PICKUP_REMINDER`, `RIDE_STARTED`, `RETURN_REMINDER`, `RETURN_OVERDUE`, `RIDE_COMPLETED`, `REFUND_SENT`, `PAYMENT_RECEIVED`, `NO_SHOW`), title, body (the finished text, in the city's time), optional Booking FK (cascade), `dedupeKey` (unique, `<EVENT>:<bookingId>`: one message per event), `readAt`, `createdAt`. Delivery outside the app is not tracked |
 | **AuditLog** | 2+/9 | Actor, action, entity, before/after summary, ip — for staff actions, KYC, refunds |
 | **TelemetryPoint** | 11 | Vehicle FK, ts, lat/lng, speed, battery, odometer, ignition (partition/retention later) |
 | **DeviceMapping / LockEvent** | 12 | IoT device ↔ vehicle; lock/unlock commands and results |
 
 ## Phase 2 notes (implemented: User, RefreshToken, StaffAssignment)
-- `User`: email (unique, stored lowercase, nullable), unique phone (E.164, nullable), `passwordHash` (argon2id, nullable), `role`, `status`, `phoneVerifiedAt`. CHECK constraints: staff roles must have an email and password; customers must have a phone. Customers sign in with a phone code, so they need no email or password (an optional email is deferred to Phase 8). `kycStatus` and outstanding-balance fields are added in Phases 4/6.
+- `User`: email (unique, stored lowercase, nullable), unique phone (E.164, nullable), `passwordHash` (argon2id, nullable), `role`, `status`, `phoneVerifiedAt`. CHECK constraints: staff roles must have an email and password; customers must have a phone. Customers sign in with a phone code, so they need no email or password (an optional email was left out of Phase 8 and is still open). `kycStatus` and outstanding-balance fields are added in Phases 4/6.
 - `RefreshToken`: stores only the SHA-256 hash of an opaque random token; `revokedAt` marks rotated/revoked tokens (kept for reuse detection).
 - `StaffAssignment`: exactly one of `cityId` / `stationId` (DB CHECK). No foreign keys yet; Phase 3 adds them.
 - OTP challenges live in Redis (`otp:phone:<userId>`, TTL 5 min; `otp:cooldown:<userId>`, TTL 30 s), not in Postgres. The `OtpChallenge` table from the entity list is not needed.

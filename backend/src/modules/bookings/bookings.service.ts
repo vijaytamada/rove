@@ -7,6 +7,7 @@ import type { Env } from '../../config/env.js';
 import { Prisma } from '../../generated/prisma/client.js';
 import { PrismaService } from '../../infra/prisma/prisma.service.js';
 import { PAYMENT_PROVIDER, type PaymentProvider } from '../../providers/payment/payment.provider.js';
+import { NotificationEventsService } from '../notifications/notification-events.service.js';
 import { PaymentsService } from '../payments/payments.service.js';
 import { KycService } from '../kyc/kyc.service.js';
 import { PricingPlansService, type PricingView } from '../pricing/pricing-plans.service.js';
@@ -58,6 +59,7 @@ export class BookingsService {
     @Inject(PAYMENT_PROVIDER) private readonly payments: PaymentProvider,
     @Inject(PaymentsService) private readonly refunds: PaymentsService,
     @Inject(SettlementsService) private readonly settlements: SettlementsService,
+    @Inject(NotificationEventsService) private readonly events: NotificationEventsService,
     @Inject(ConfigService) config: ConfigService<Env, true>,
   ) {
     this.pinSecret = config.get('JWT_ACCESS_SECRET', { infer: true });
@@ -256,6 +258,7 @@ export class BookingsService {
         'Your hold on this scooter ran out, so your payment was refunded. Book it again.',
       );
     }
+    await this.events.bookingConfirmed(id);
     return this.view(user.id, id);
   }
 
@@ -305,9 +308,12 @@ export class BookingsService {
       return { outcome, paid };
     });
 
+    let sent = true;
     if (result.outcome.refundAmount > 0 && result.paid) {
-      await this.refunds.refund(result.paid.id, result.outcome.refundAmount, result.paid.providerRef, 'CANCELLATION');
+      sent = await this.refunds.refund(result.paid.id, result.outcome.refundAmount, result.paid.providerRef, 'CANCELLATION');
     }
+    // Cancelling a booking that was never paid for is not worth a message.
+    if (result.paid) await this.events.bookingCancelled(id, { amount: result.outcome.refundAmount, sent });
     return this.view(user.id, id);
   }
 

@@ -67,7 +67,7 @@ Each phase ends with a usable increment and a completion checklist. Don't start 
 - **Outcome:** **MVP demo script passes end-to-end.** Engine has table-driven unit tests covering edge cases (exactly on grace boundary, 0 km, deposit < charges, etc.).
 
 ## Phase 7 — Operations Dashboard
-**Status: complete and tested on `feature/dashboards` (not merged).** `GET /dashboard/admin|city/:id|station/:id|customer` (read-only, no new tables, rolling 24 hour / 7 day / 30 day windows); website: `/admin` overview for admins and managers (right now, fleet and utilization, activity, money, a row per city or station), a station strip on the desk, and the customer home with recent rides and money owed; app: the same customer home. Backend: 10 unit + 16 e2e tests; Flutter: 4 new tests.
+**Status: complete and tested; merged into `dev` on 2026-10-11.** `GET /dashboard/admin|city/:id|station/:id|customer` (read-only, no new tables, rolling 24 hour / 7 day / 30 day windows); website: `/admin` overview for admins and managers (right now, fleet and utilization, activity, money, a row per city or station), a station strip on the desk, and the customer home with recent rides and money owed; app: the same customer home. Backend: 10 unit + 16 e2e tests; Flutter: 4 new tests.
 - **Objective:** Role-specific dashboards.
 - **Features:** Super Admin: global counts/revenue/fleet status; City Manager: city bookings, fleet utilization, outstanding settlements; Station Employee: station queue; Customer: home with active rental, history, profile. Read-only aggregate endpoints.
 - **Modules:** `Dashboard` (queries only, no new tables).
@@ -75,6 +75,7 @@ Each phase ends with a usable increment and a completion checklist. Don't start 
 - **Outcome:** Each role lands on a useful, correctly-scoped dashboard.
 
 ## Phase 8 — Notifications
+**Status: complete and tested on `feature/notifications` (merged into `dev` when the user says so).** In-app inbox for customers (booking confirmed and cancelled, expired hold, pickup and return reminders, overdue, ride started and complete with the final bill, refund sent, payment received, no-show) on the website (bell + `/notifications`) and in the app (bell + inbox screen), a `NotificationProvider` seam (mock logs), and the minute background job (`modules/jobs`) that expires unpaid holds and sends reminders. Backend: 21 new unit + 28 new e2e tests; Flutter: 9 new tests. Email was **not** built (decision in `docs/PROJECT_PLAN.md`); staff are not notified yet.
 - **Objective:** Customers/staff are informed.
 - **Features:** `NotificationProvider` interface; mock (log + DB record) and optionally email via SMTP (Mailpit in Docker); events: booking confirmed/cancelled, payment confirmed, pickup reminder, return reminder, settlement/refund; scheduled reminders (Nest schedule or BullMQ on Redis — add only now).
 - **Modules:** `Notifications` (+ event listeners).

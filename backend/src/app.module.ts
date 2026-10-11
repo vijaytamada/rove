@@ -14,6 +14,8 @@ import { PricingModule } from './modules/pricing/pricing.module.js';
 import { RentalsModule } from './modules/rentals/rentals.module.js';
 import { SettlementsModule } from './modules/settlements/settlements.module.js';
 import { DashboardModule } from './modules/dashboard/dashboard.module.js';
+import { JobsModule } from './modules/jobs/jobs.module.js';
+import { NotificationsModule } from './modules/notifications/notifications.module.js';
 import { RbacModule } from './modules/rbac/rbac.module.js';
 import { UsersModule } from './modules/users/users.module.js';
 
@@ -38,6 +40,8 @@ import { UsersModule } from './modules/users/users.module.js';
     RentalsModule,
     SettlementsModule,
     DashboardModule,
+    NotificationsModule,
+    JobsModule,
     HealthModule,
   ],
 })

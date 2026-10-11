@@ -45,7 +45,7 @@ backend/test/        e2e tests
 | Telemetry | 11 | Ingest, latest state, history |
 | AuditLog | 9 | Sensitive-action audit trail (can start earlier as a small helper) |
 
-Dependency direction (no cycles): `Rentals → Bookings → Vehicles/Pricing/Payments/Kyc`; `Settlements → Pricing/Payments/Rentals`; `Dashboard → everything (read-only)`; `Notifications` listens to domain events (Nest `EventEmitter`) so core modules don't import it.
+Dependency direction (no cycles): `Rentals → Bookings → Vehicles/Pricing/Payments/Kyc`; `Settlements → Pricing/Payments/Rentals`; `Dashboard → everything (read-only)`; `Bookings`, `Rentals` and `Settlements` call `NotificationEventsService` (in `Notifications`, which depends only on Prisma and the provider) after their own work is saved; every call is safe to repeat and never throws. A plain call was chosen over an event bus: one process, one database, and the callers must wait for the message to be stored so tests (and the customer's next screen) see it. `Jobs` (`modules/jobs`) runs the minute job over `Notifications`.
 
 ## 4. Provider abstraction
 Pattern: interface + injection token + env-selected implementation. Business code injects the token.
@@ -67,7 +67,7 @@ Use `useFactory` with `ConfigService`; unknown value → startup error.
 | `OtpProvider` | `send(phone, purpose) → {challengeId}`, `verify(challengeId, code) → boolean` | Logs code; accepts `123456` (non-prod only) | SMS OTP vendor (Ph. 9). Expiry/retries/rate-limit live in our `Otp` service, not the provider |
 | `KycProvider` | `start(userId, consentRef) → {sessionId, redirectUrl?}`, `getResult(sessionId) → {status, providerRef}`; webhook parser later | Immediately `VERIFIED` (magic name `REJECT` → `REJECTED` for testing) | Compliant Aadhaar/KYC vendor (Ph. 9). Returns status + opaque refs only |
 | `PaymentProvider` | see above | Instant success; `amount % 100 == 99` or a flag → failure for tests | Gateway (Ph. 10); adds webhook verification |
-| `NotificationProvider` | `send({channel, to, template, data})` | Writes to `Notification` table + console | SMTP/SMS/push (Ph. 8+) |
+| `NotificationProvider` | `deliver({userId, phone, title, body})` (the in-app copy is stored by `NotificationsService`; the provider only delivers outside the app) | Logs the message | SMS (Ph. 9, needs India DLT templates), push, email |
 | `TelemetryProvider` | `subscribe(handler)` / `ingest(point)`; simulator generates points | Simulator service | MQTT/HTTP device gateway (Ph. 11/12) |
 | `LockProvider` (Ph. 12) | `lock(vehicleId)`, `unlock(vehicleId)` | No-op success | Smart-lock vendor |
 
@@ -100,4 +100,4 @@ Transitions are implemented in one service method each, inside a DB transaction,
 - **Multi-vehicle future:** `Vehicle.type` + `VehicleModel`; pricing plan keyed by model; type-specific attributes live on `VehicleModel` (or a JSON `specs` column) rather than as `Vehicle` columns.
 
 ## 9. Local infra (Phase 1)
-`infra/docker-compose.yml`: `postgres:16`, `redis:7` (+ optional `mailpit` in Phase 8). Backend/frontend run on host via npm in dev; containerizing them is a Phase 12 concern.
+`infra/docker-compose.yml`: `postgres:16`, `redis:7` (email was not built in Phase 8, so no `mailpit`). Backend/frontend run on host via npm in dev; containerizing them is a Phase 12 concern.

@@ -38,7 +38,7 @@ for (const [path, methods] of Object.entries(spec.paths)) {
     if (!publicPaths.has(path)) {
       check(`anon ${m} ${path} -> 401`, anon.status === 401, `got ${anon.status}`);
       const cust = await j(m, url, { token: customer, body });
-      const allowedForCustomer = ["/api/v1/me", "/api/v1/auth/otp/send", "/api/v1/auth/otp/verify", "/api/v1/auth/phone/change", "/api/v1/auth/phone/change/verify"].includes(path) || customerOnly.has(path);
+      const allowedForCustomer = ["/api/v1/me", "/api/v1/auth/otp/send", "/api/v1/auth/otp/verify", "/api/v1/auth/phone/change", "/api/v1/auth/phone/change/verify", "/api/v1/notifications", "/api/v1/notifications/unread-count", "/api/v1/notifications/read-all", "/api/v1/notifications/{id}/read"].includes(path) || customerOnly.has(path);
       if (customerOnly.has(path)) {
         for (const [who, token] of [["admin", admin], ["manager", manager], ["employee", employee]]) {
           check(`${who} ${m} ${path} -> 403 (customers only)`, (await j(m, url, { token, body })).status === 403);
@@ -49,6 +49,17 @@ for (const [path, methods] of Object.entries(spec.paths)) {
   }
 }
 check(`checked ${routeCount} routes from OpenAPI`, routeCount > 30);
+
+// 1b. Notifications are private to the signed-in user: staff have their own (empty) inbox and cannot read a customer's.
+const note = (await j("GET", "/api/v1/notifications?limit=1", { token: customer })).data;
+check("customer inbox is a page of messages", Array.isArray(note.items) && typeof note.total === "number");
+check("unread count is a number", typeof (await j("GET", "/api/v1/notifications/unread-count", { token: customer })).data.count === "number");
+check("staff inbox is empty", (await j("GET", "/api/v1/notifications", { token: employee })).data.total === 0);
+if (note.items[0]) {
+  const mine = note.items[0].id;
+  check("staff cannot mark a customer's message read (404)", (await j("POST", `/api/v1/notifications/${mine}/read`, { token: employee, body: {} })).status === 404);
+}
+check("a bad notifications filter is a clean 400", (await j("GET", "/api/v1/notifications?unread=maybe", { token: customer })).status === 400);
 
 // 2. Role boundaries on key admin actions.
 check("employee cannot create city", (await j("POST", "/api/v1/cities", { token: employee, body: { name: "x", state: "y" } })).status === 403);

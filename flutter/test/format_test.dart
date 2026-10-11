@@ -8,6 +8,22 @@ void main() {
     expect(formatKm(0), '0');
   });
 
+  group('formatAgo', () {
+    final now = DateTime.utc(2026, 10, 11, 9, 0); // 14:30 in India
+    test('counts minutes, then hours, for the first day', () {
+      expect(formatAgo(now.subtract(const Duration(seconds: 20)), now), 'Just now');
+      expect(formatAgo(now.subtract(const Duration(minutes: 5)), now), '5 min ago');
+      expect(formatAgo(now.subtract(const Duration(minutes: 59)), now), '59 min ago');
+      expect(formatAgo(now.subtract(const Duration(hours: 3, minutes: 10)), now), '3 h ago');
+      expect(formatAgo(now.subtract(const Duration(hours: 23, minutes: 59)), now), '23 h ago');
+    });
+
+    test('says Yesterday for the previous day on the India clock, then the date', () {
+      expect(formatAgo(DateTime.utc(2026, 10, 10, 3, 0), now), 'Yesterday'); // 10 Oct, 08:30 in India
+      expect(formatAgo(DateTime.utc(2026, 10, 9, 3, 0), now), '9 Oct');
+    });
+  });
+
   group('formatMoney', () {
     test('shows whole rupees without decimals and uses Indian digit grouping', () {
       expect(formatMoney(0), '₹0');

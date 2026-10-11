@@ -364,3 +364,27 @@ export interface CustomerDashboard {
   owed: { bookingId: string; amount: number } | null;
   stats: { rides: number; distanceKm: number };
 }
+
+export type NotificationType =
+  | "BOOKING_CONFIRMED"
+  | "BOOKING_CANCELLED"
+  | "BOOKING_EXPIRED"
+  | "PICKUP_REMINDER"
+  | "RIDE_STARTED"
+  | "RETURN_REMINDER"
+  | "RETURN_OVERDUE"
+  | "RIDE_COMPLETED"
+  | "REFUND_SENT"
+  | "PAYMENT_RECEIVED"
+  | "NO_SHOW";
+
+export interface NotificationView {
+  id: string;
+  type: NotificationType;
+  title: string;
+  body: string;
+  /** The booking this is about, to link to it. */
+  bookingId: string | null;
+  readAt: string | null;
+  createdAt: string;
+}

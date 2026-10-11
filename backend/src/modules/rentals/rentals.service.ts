@@ -10,6 +10,7 @@ import { PrismaService } from '../../infra/prisma/prisma.service.js';
 import { RedisService } from '../../infra/redis/redis.service.js';
 import { liveBookingOverlap } from '../bookings/booking-availability.js';
 import { derivePin, normalizeBookingCode } from '../bookings/booking-codes.js';
+import { NotificationEventsService } from '../notifications/notification-events.service.js';
 import { PaymentsService } from '../payments/payments.service.js';
 import { ScopeService } from '../rbac/scope.service.js';
 import { SettlementsService } from '../settlements/settlements.service.js';
@@ -48,6 +49,7 @@ export class RentalsService {
     @Inject(ScopeService) private readonly scopes: ScopeService,
     @Inject(PaymentsService) private readonly payments: PaymentsService,
     @Inject(SettlementsService) private readonly settlements: SettlementsService,
+    @Inject(NotificationEventsService) private readonly events: NotificationEventsService,
     @Inject(ConfigService) config: ConfigService<Env, true>,
   ) {
     this.pinSecret = config.get('JWT_ACCESS_SECRET', { infer: true });
@@ -206,6 +208,7 @@ export class RentalsService {
     } catch (e) {
       throw this.mapOverlap(e);
     }
+    await this.events.rideStarted(id);
     return this.get(user, id, now);
   }
 
@@ -300,6 +303,7 @@ export class RentalsService {
         this.logger.error(`Deposit refund for settlement ${bill.settlementId} failed: ${e instanceof Error ? e.message : String(e)}`);
       }
     }
+    await this.events.rideCompleted(id);
     return this.get(user, id, now);
   }
 
@@ -323,9 +327,11 @@ export class RentalsService {
       where: { bookingId: id, status: 'SUCCEEDED' },
       orderBy: { createdAt: 'desc' },
     });
+    let sent = true;
     if (paid && row.depositAmount > 0) {
-      await this.payments.refund(paid.id, row.depositAmount, paid.providerRef, 'NO_SHOW');
+      sent = await this.payments.refund(paid.id, row.depositAmount, paid.providerRef, 'NO_SHOW');
     }
+    await this.events.noShow(id, { amount: paid ? row.depositAmount : 0, sent });
     return this.get(user, id, now);
   }
 

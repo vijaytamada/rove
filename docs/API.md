@@ -139,8 +139,24 @@ Read-only numbers for each role's home. Nothing here changes data and there are 
 - `now` (not tied to the window): `waitingPickups`, `ridesOut`, `overdueRides` (out past the booked end), `depositsHeld` (deposits of paid bookings not yet settled), `owed` and `refundsPending` (`{ count, amount }`).
 Rides, payments and settlements belong to the station where the ride started.
 
-### Phase 8+ 
-`GET /notifications` · `POST /webhooks/payments` · `POST /webhooks/kyc` · `POST /telemetry` · `GET /fleet/live` · lock/unlock endpoints — designed in their phases.
+### Phase 8 - Notifications
+A customer's inbox. Every signed-in user has their own (staff get no messages yet, so theirs is empty), and nobody can read or change anyone else's: another person's id is a 404 `NOTIFICATION_NOT_FOUND`.
+
+| Route | Who | What it does |
+|---|---|---|
+| `GET /notifications?unread=true&page&limit` | signed in | `{ items, total, page, limit }`, newest first. `unread=true` only the unread ones (`unread=maybe` is a 400). Each item: `id`, `type`, `title`, `body`, `bookingId` (or null, so clients can link to the booking), `readAt` (or null), `createdAt` |
+| `GET /notifications/unread-count` | signed in | `{ count }` for the bell |
+| `POST /notifications/:id/read` | signed in | Marks one message read (idempotent: the first `readAt` is kept) and returns it |
+| `POST /notifications/read-all` | signed in | Marks every unread message read, returns `{ updated }` |
+
+**Events** (`type`; one message per booking and event, so a repeat never sends twice): `BOOKING_CONFIRMED` (payment went through; amounts, deposit, booking code - never the PIN), `BOOKING_CANCELLED` (only for a paid booking; says what was refunded, or that the refund is being processed if the gateway said no), `BOOKING_EXPIRED` (the 10-minute hold ran out), `PICKUP_REMINDER` (the hour before the start; skipped when the booking was made less than an hour before it starts), `RIDE_STARTED`, `RETURN_REMINDER` (the half hour before the ride is due back), `RETURN_OVERDUE` (once the grace minutes after the booked end are used up, when the late fee starts), `RIDE_COMPLETED` (the final bill and where the money stands: refunded, being processed, an amount owed, or nothing to move), `REFUND_SENT` (a refund that failed at first went through after a staff retry), `PAYMENT_RECEIVED` (an amount owed was paid, by the customer or at the desk), `NO_SHOW` (deposit refunded, rental kept). Times in a message are on the city's clock. A message that fails to store or deliver never breaks the booking, payment or return that caused it.
+
+**Background job:** every minute (`JOBS_ENABLED`, on by default) the backend marks unpaid holds whose 10 minutes ran out as `EXPIRED`, announces recent expired holds (including ones another request already marked), and sends the pickup, return and overdue messages that came due. A Redis lock keeps several backend instances from running it at the same time; each step is safe to repeat.
+
+Codes added: `NOTIFICATION_NOT_FOUND`.
+
+### Phase 9+
+`POST /webhooks/payments` · `POST /webhooks/kyc` · `POST /telemetry` · `GET /fleet/live` · lock/unlock endpoints — designed in their phases.
 
 ## Access
 Per-endpoint role/scope rules: see `docs/RBAC.md`.
