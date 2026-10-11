@@ -257,10 +257,11 @@ model Vehicle {
   createdAt          DateTime      @default(now())
   updatedAt          DateTime      @updatedAt
 
-  model    VehicleModel @relation(fields: [modelId], references: [id], onDelete: Restrict)
-  station  Station?     @relation(fields: [stationId], references: [id], onDelete: Restrict)
-  bookings Booking[]
-  rentals  Rental[]
+  model     VehicleModel     @relation(fields: [modelId], references: [id], onDelete: Restrict)
+  station   Station?         @relation(fields: [stationId], references: [id], onDelete: Restrict)
+  bookings  Booking[]
+  rentals   Rental[]
+  telemetry TelemetryPoint[]
 
   @@index([stationId, status])
   @@index([modelId])
@@ -315,10 +316,10 @@ model Booking {
   createdAt       DateTime      @default(now())
   updatedAt       DateTime      @updatedAt
 
-  user       User        @relation(fields: [userId], references: [id], onDelete: Restrict)
-  vehicle    Vehicle     @relation(fields: [vehicleId], references: [id], onDelete: Restrict)
-  station    Station     @relation(fields: [stationId], references: [id], onDelete: Restrict)
-  payments   Payment[]
+  user          User           @relation(fields: [userId], references: [id], onDelete: Restrict)
+  vehicle       Vehicle        @relation(fields: [vehicleId], references: [id], onDelete: Restrict)
+  station       Station        @relation(fields: [stationId], references: [id], onDelete: Restrict)
+  payments      Payment[]
   rental        Rental?
   settlement    Settlement?
   notifications Notification[]
@@ -516,4 +517,26 @@ model AuditLog {
   @@index([createdAt])
   @@index([actorId, createdAt])
   @@index([entityType, entityId])
+}
+
+// One reading from a scooter's tracker (or the simulator): where it is and how it is doing. The newest reading per scooter
+// is also kept in Redis for the live map; this table is the history, pruned after TELEMETRY_RETENTION_DAYS.
+model TelemetryPoint {
+  id             BigInt   @id @default(autoincrement())
+  vehicleId      String   @db.Uuid
+  // When the tracker took the reading (its clock), versus when we stored it.
+  recordedAt     DateTime
+  receivedAt     DateTime @default(now())
+  latitude       Float
+  longitude      Float
+  speedKmh       Float
+  batteryPercent Int
+  odometerKm     Float
+  ignition       Boolean
+
+  vehicle Vehicle @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+
+  // A tracker that sends the same reading twice (a retry) stores it once.
+  @@unique([vehicleId, recordedAt])
+  @@index([recordedAt])
 }

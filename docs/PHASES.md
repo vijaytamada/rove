@@ -98,6 +98,7 @@ Each phase ends with a usable increment and a completion checklist. Don't start 
 - **Outcome:** End-to-end paid rental in gateway test mode, then live.
 
 ## Phase 11 — GPS & Telemetry
+**Status: complete and tested on `feature/telemetry` (merged into `dev` when the user says so).** `TelemetryProvider` (mock, simulator), `POST /telemetry` with a device key, `TelemetryPoint` history with retention, newest reading in Redis, `GET /fleet/live` and `GET /vehicles/:id/telemetry` scoped per role, and a live map on the website (`/staff/map`). Backend: 29 new unit + 19 new e2e tests. Console-only: no app counterpart. Not built: cross-checking the staff odometer against telemetry (optional in the plan), a real device gateway (Phase 12).
 - **Objective:** Live vehicle state.
 - **Features:** `TelemetryProvider` interface; simulator (emits location/battery/speed/odometer/ignition); ingest endpoint/stream; `TelemetryPoint` history; latest state in Redis; live fleet map; optional: odometer from telemetry cross-checked with staff entry.
 - **Modules:** `Telemetry`.

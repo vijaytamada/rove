@@ -19,6 +19,12 @@ const envSchema = z
     KYC_WEBHOOK_SECRET: z.string().min(16, 'must be at least 16 characters').default('dev-only-kyc-webhook-secret'),
     /** The mock only logs. In-app notifications work with any value; a real SMS or push sender is added later. */
     NOTIFICATION_PROVIDER: z.enum(['mock']).default('mock'),
+    /** `mock`: readings only arrive through POST /telemetry. `simulator`: made-up trackers for development. */
+    TELEMETRY_PROVIDER: z.enum(['mock', 'simulator']).default('mock'),
+    /** The key a tracker (or its gateway) sends in the x-device-key header. */
+    TELEMETRY_INGEST_KEY: z.string().min(16, 'must be at least 16 characters').default('dev-only-telemetry-ingest-key'),
+    /** How long readings are kept. */
+    TELEMETRY_RETENTION_DAYS: z.coerce.number().int().positive().default(7),
     /** Runs the background job (expire unpaid holds, send reminders) every minute. Turned off in tests. */
     JOBS_ENABLED: z
       .enum(['true', 'false'])
@@ -41,6 +47,20 @@ const envSchema = z
         code: 'custom',
         path: ['KYC_WEBHOOK_SECRET'],
         message: 'a dev-only secret must not be used in production',
+      });
+    }
+    if (env.TELEMETRY_INGEST_KEY.startsWith('dev-only')) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['TELEMETRY_INGEST_KEY'],
+        message: 'a dev-only key must not be used in production',
+      });
+    }
+    if (env.TELEMETRY_PROVIDER === 'simulator') {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['TELEMETRY_PROVIDER'],
+        message: 'the simulator must not be used in production',
       });
     }
     for (const key of ['OTP_PROVIDER', 'KYC_PROVIDER', 'PAYMENT_PROVIDER'] as const) {

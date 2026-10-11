@@ -68,7 +68,7 @@ Use `useFactory` with `ConfigService`; unknown value → startup error.
 | `KycProvider` | `start(userId, consentRef) → {sessionId, redirectUrl?}`, `getResult(sessionId) → {status, providerRef}`; webhook parser later | Immediately `VERIFIED` (magic name `REJECT` → `REJECTED` for testing) | Compliant Aadhaar/KYC vendor (Ph. 9). Returns status + opaque refs only |
 | `PaymentProvider` | see above | Instant success; `amount % 100 == 99` or a flag → failure for tests | Gateway (Ph. 10); adds webhook verification |
 | `NotificationProvider` | `deliver({userId, phone, title, body})` (the in-app copy is stored by `NotificationsService`; the provider only delivers outside the app) | Logs the message | SMS (Ph. 9, needs India DLT templates), push, email |
-| `TelemetryProvider` | `subscribe(handler)` / `ingest(point)`; simulator generates points | Simulator service | MQTT/HTTP device gateway (Ph. 11/12) |
+| `TelemetryProvider` | `start(host)` / `stop()`, where `host` offers `listVehicles()` and `ingest(readings)` (so a simulator reads the fleet and a real gateway just calls `ingest` as messages arrive) | `mock` does nothing; `simulator` moves scooters on a ride | MQTT/HTTP device gateway (Ph. 12) |
 | `LockProvider` (Ph. 12) | `lock(vehicleId)`, `unlock(vehicleId)` | No-op success | Smart-lock vendor |
 
 Rules: providers return normalized domain types (never vendor payloads); persist only `providerRef` + status; every provider call is idempotent via our `reference`; mock and real share the same contract tests.
