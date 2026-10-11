@@ -100,6 +100,12 @@ These are the simplest reasonable defaults so Phases 4–6 can proceed; confirm 
 | 2026-10-08 | One successful deposit refund per payment is enforced by a partial unique index, and retries use a new per-attempt gateway key | A retry or a parallel call can never send the deposit twice |
 | 2026-10-08 | Cancelled and no-show bookings have no settlement (their refunds are in the booking rules) | Nothing was ridden |
 | 2026-10-08 | Not built in Phase 6: waiving or adjusting a charge, holding a refund for manager review, a refund audit log (Phase 9), gateway webhooks for refund status (Phase 10), customer notifications (Phase 8) | Kept out to stay in scope; the settlement statuses leave room for each |
+| 2026-10-09 | Dashboards are four read-only endpoints (admin, city, station, customer) with no new tables; the staff ones take a rolling window (last 24 hours, 7 days or 30 days, default 7 days) instead of calendar days | One definition that works across cities in different time zones; no data model change |
+| 2026-10-09 | Money on the dashboards is plain: collected (successful payments), refunded (successful refunds) and net for the window, plus deposits held, amounts owed and refunds not sent right now. Net is labelled as not being earnings because it includes held deposits | Honest numbers anyone can reconcile to the payment list; real revenue accounting (deposits as liabilities, tax) belongs with Phase 10 |
+| 2026-10-09 | Utilization = ride hours in the window divided by scooter-hours (fleet size x window hours), computed in SQL and capped at 100 | Needs no new data and compares cities and stations fairly |
+| 2026-10-09 | Rides, payments and settlements count for the station where the ride started; a scooter that is out has no station, so the fleet total adds the rides out to the scooters at stations | Matches how the data is stored; documented in the API |
+| 2026-10-09 | A manager's overview is always one of their cities (city tabs if several); an admin sees the network and can open any city. A city in the URL that is not a manager's own is ignored, not an error | No way to peek at another city by editing the address |
+| 2026-10-09 | The customer dashboard reuses the booking objects of `GET /bookings` (active, upcoming, last 3 finished, what is owed, ride totals) so the website and the app show the same home from one call | Keeps the two clients in step and avoids repeating booking logic |
 
 ## 8. Open questions
 See the end of the planning summary / `docs/PHASES.md` §Open decisions. Resolve before the phase noted.

@@ -45,6 +45,8 @@ const routes = [
   ["/staff/bookings/00000000-0000-4000-8000-000000000000", { anon: "staff-login", customer: "to:/", employee: "404", manager: "404", admin: "404" }],
   ["/staff/bookings/not-a-uuid", { anon: "staff-login", customer: "to:/", employee: "404", manager: "404", admin: "404" }],
   ["/admin", { anon: "staff-login", customer: "to:/", employee: "to:/staff", manager: "ok", admin: "ok" }],
+  ["/admin?range=1d", { anon: "staff-login", customer: "to:/", employee: "to:/staff", manager: "ok", admin: "ok" }],
+  ["/admin?range=nope", { anon: "staff-login", customer: "to:/", employee: "to:/staff", manager: "ok", admin: "ok" }],
   ["/admin/cities", { anon: "staff-login", customer: "to:/", employee: "to:/staff", manager: "ok", admin: "ok" }],
   ["/admin/stations", { anon: "staff-login", customer: "to:/", employee: "to:/staff", manager: "ok", admin: "ok" }],
   [`/admin/stations/${stationHyd.id}`, { anon: "staff-login", customer: "to:/", employee: "to:/staff", manager: "ok", admin: "ok" }],
@@ -130,5 +132,15 @@ const t18 = await text("/staff/fleet", tokens.employee);
 checks.push(["employee scooter list shows only own station", /BLR-001|Indiranagar/.test(t18) && !/HITEC/.test(t18) && !/Koramangala/.test(t18)]);
 const t19 = await text("/staff/settlements", tokens.employee);
 checks.push(["settlements page has its three lists", /Settlements/.test(t19) && /Owed/.test(t19) && /Refunds waiting/.test(t19) && /Paid/.test(t19)]);
+const t20 = await text("/admin", tokens.admin);
+checks.push(["admin dashboard shows the network with a row per city", /Right now/.test(t20) && /Utilization/.test(t20) && /Bengaluru/.test(t20) && /Hyderabad/.test(t20)]);
+const t21 = await text("/admin", tokens.manager);
+checks.push(["manager dashboard is about their city only", /Hyderabad: how the city is doing/.test(t21) && /HITEC City/.test(t21) && !/Bengaluru/.test(t21) && !/Indiranagar/.test(t21)]);
+const t22 = await text(`/admin?city=${blr.id}`, tokens.manager);
+checks.push(["a manager cannot open another city's dashboard through the URL", /Hyderabad: how the city is doing/.test(t22) && !/Bengaluru/.test(t22)]);
+const t23 = await text("/staff", tokens.employee);
+checks.push(["station desk shows the station's numbers", /Waiting for pickup/.test(t23) && /Owed by customers/.test(t23) && /Refunds not sent/.test(t23)]);
+const t24 = await text("/admin?range=1d", tokens.admin);
+checks.push(["the 24 hour window is labelled", /Activity, the last 24 hours/.test(t24) && /Money, the last 24 hours/.test(t24)]);
 for (const [name, ok] of checks) { console.log(`${ok ? "PASS" : "FAIL"}  ${name}`); if (!ok) failures++; }
 process.exit(failures ? 1 : 0);

@@ -304,3 +304,63 @@ export interface StaffBookingView {
 }
 
 export type DeskTab = "pickups" | "rides" | "past";
+
+// ---- Dashboards (read-only numbers for each role's home) ----
+export type DashboardRange = "1d" | "7d" | "30d";
+
+export interface DashboardMetrics {
+  window: { key: DashboardRange; from: string; to: string; hours: number };
+  fleet: { total: number; available: number; inRide: number; maintenance: number; offline: number };
+  utilizationPercent: number;
+  activity: { newBookings: number; ridesStarted: number; ridesCompleted: number; cancellations: number; noShows: number };
+  money: { collected: number; refunded: number; net: number };
+  now: {
+    waitingPickups: number;
+    ridesOut: number;
+    overdueRides: number;
+    depositsHeld: number;
+    owed: { count: number; amount: number };
+    refundsPending: { count: number; amount: number };
+  };
+}
+
+export interface DashboardRow {
+  id: string;
+  name: string;
+  fleet: DashboardMetrics["fleet"];
+  utilizationPercent: number;
+  money: DashboardMetrics["money"];
+  now: Pick<DashboardMetrics["now"], "waitingPickups" | "ridesOut" | "overdueRides" | "owed" | "refundsPending">;
+}
+
+export interface AdminDashboard extends DashboardMetrics {
+  cities: (DashboardRow & { stations: number })[];
+}
+
+export interface CityDashboard extends DashboardMetrics {
+  city: { id: string; name: string; timezone: string };
+  stations: DashboardRow[];
+}
+
+export interface QueueItem {
+  id: string;
+  code: string;
+  customerName: string;
+  vehicleCode: string;
+  startAt: string;
+  endAt: string;
+  overdue: boolean;
+}
+
+export interface StationDashboard extends DashboardMetrics {
+  station: { id: string; name: string; cityId: string; cityName: string; timezone: string };
+  queue: { pickups: QueueItem[]; rides: QueueItem[] };
+}
+
+export interface CustomerDashboard {
+  active: BookingView | null;
+  upcoming: BookingView | null;
+  recent: BookingView[];
+  owed: { bookingId: string; amount: number } | null;
+  stats: { rides: number; distanceKm: number };
+}

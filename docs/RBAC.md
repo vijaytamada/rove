@@ -58,6 +58,10 @@ A user has exactly one role. Role is in the JWT; **scope is loaded from DB (cach
 - Staff routes (`/settlements`) are scoped like the desk: a bill is visible to staff who run the booking's pickup station or the station the scooter was returned to (managers: their cities; admins: all). Other stations get 404, customers 403.
 - Staff can take the payment of an amount owed and retry a failed refund. **Waiving or changing a charge is not built yet** (the matrix row below is the plan: managers and admins).
 
+## Dashboards (Phase 7)
+- `GET /dashboard/admin`: super admin only. `GET /dashboard/city/:id`: a manager of that city or a super admin (another city's manager gets 403). `GET /dashboard/station/:id`: the station's employee, a manager of its city, or a super admin. `GET /dashboard/customer`: customers only (staff get 403).
+- The website's `/admin` overview picks the right one for the role: admins see the network and can open any city; managers always see one of their cities (a city in the URL that is not theirs is ignored). The station desk shows the station dashboard for an employee's own station or the station chosen in the filter.
+
 ## Notes
 - Employee "own station" for a return means the **return station** (the vehicle may have been picked up elsewhere).
 - Customers cannot book without a verified identity check (`KYC_REQUIRED`); a customer who owes money for an earlier ride cannot book again (`OUTSTANDING_BALANCE`) until it is paid. Phase 4: booking, payment, cancel and the identity check are `CUSTOMER`-only routes (staff get 403, even admins); pricing plans are readable by all staff and writable by super admins only; a customer sees only their own bookings (404 for others).
