@@ -25,6 +25,17 @@ const envSchema = z
     TELEMETRY_INGEST_KEY: z.string().min(16, 'must be at least 16 characters').default('dev-only-telemetry-ingest-key'),
     /** How long readings are kept. */
     TELEMETRY_RETENTION_DAYS: z.coerce.number().int().positive().default(7),
+    /** Turns the per-IP request limits on or off (leave on; off only for load tests). */
+    RATE_LIMIT_ENABLED: z
+      .enum(['true', 'false'])
+      .default('true')
+      .transform((v) => v === 'true'),
+    /** How many reverse proxies sit in front of the API (0 = none, clients connect directly). Decides which address is "the client's IP". */
+    TRUST_PROXY: z.coerce.number().int().min(0).max(5).default(0),
+    /** The Swagger UI at /api/docs. Off in production unless set to true. */
+    SWAGGER_ENABLED: z.enum(['true', 'false']).optional(),
+    /** `json` = one JSON object per log line (for log collectors). Default: json in production, readable otherwise. */
+    LOG_FORMAT: z.enum(['json', 'pretty']).optional(),
     /** Runs the background job (expire unpaid holds, send reminders) every minute. Turned off in tests. */
     JOBS_ENABLED: z
       .enum(['true', 'false'])
@@ -40,6 +51,13 @@ const envSchema = z
         code: 'custom',
         path: ['JWT_ACCESS_SECRET'],
         message: 'a dev-only secret must not be used in production',
+      });
+    }
+    if (/localhost|127\.0\.0\.1/.test(env.CORS_ORIGIN)) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['CORS_ORIGIN'],
+        message: 'set CORS_ORIGIN to the real website address in production',
       });
     }
     if (env.KYC_WEBHOOK_SECRET.startsWith('dev-only')) {

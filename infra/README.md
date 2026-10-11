@@ -17,4 +17,4 @@ docker compose down         # stop (data kept in volumes)
 docker compose down -v      # stop and DELETE data
 ```
 
-Backend and frontend run on the host in development; containerizing them is a Phase 12 task. (No `mailpit`: email notifications were not built in Phase 8.) Full run guide: `docs/DEV_SETUP.md`.
+Backend and frontend run on the host in development. `docker-compose.prod.yml` is the production-style stack (Postgres, Redis, a migration job, the API and the website; see `docs/DEV_SETUP.md` §5b and `production.env.example`). (No `mailpit`: email notifications were not built in Phase 8.) Full run guide: `docs/DEV_SETUP.md`.

@@ -1,0 +1,96 @@
+# Runs on every push and pull request: the same checks as docs/TESTING.md ("How to run everything").
+# There is no Git remote yet, so this has not run on GitHub; every command in it was run locally.
+name: CI
+
+on:
+  push:
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: rove
+          POSTGRES_PASSWORD: rove
+          POSTGRES_DB: rove
+        ports: ["5442:5432"]
+        options: >-
+          --health-cmd "pg_isready -U rove -d rove" --health-interval 5s --health-timeout 3s --health-retries 10
+      redis:
+        image: redis:7-alpine
+        ports: ["6389:6379"]
+        options: >-
+          --health-cmd "redis-cli ping" --health-interval 5s --health-timeout 3s --health-retries 10
+    env:
+      NODE_ENV: test
+      DATABASE_URL: postgresql://rove:rove@localhost:5442/rove?schema=public
+      REDIS_URL: redis://localhost:6389
+      JWT_ACCESS_SECRET: ci-only-access-secret-not-used-anywhere-0001
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - run: npm ci
+      - run: npm run prisma:generate
+      - run: npm run prisma:deploy
+      - run: npm run lint
+      - run: npm run build
+      - run: npm test
+      # The end-to-end tests need the database and Redis above. They use TELEMETRY_PROVIDER=mock and JOBS_ENABLED=false
+      # (set in vitest.config.e2e.ts), so nothing else writes to the database while they run.
+      - run: npm run test:e2e
+      - name: Dependency audit (what the running API ships with)
+        # Dev-only tools (the Prisma command-line tool has known advisories, see docs/TESTING.md) are left out on purpose.
+        run: npm audit --omit=dev --omit=optional --audit-level=high
+
+  frontend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run build
+
+  flutter:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: flutter
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - run: flutter pub get
+      - run: flutter analyze
+      - run: flutter test
+
+  images:
+    # The two production images must keep building.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker build --target runtime -t rove-backend backend
+      - run: docker build -t rove-web frontend

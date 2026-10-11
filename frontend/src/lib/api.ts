@@ -1,3 +1,4 @@
+import { headers as requestHeaders } from "next/headers";
 import { API_URL } from "./config";
 import type { CityView, PublicVehicleDetail, StationView, VehicleBrowseView } from "./types";
 
@@ -21,6 +22,21 @@ export async function getHealth(): Promise<HealthReport | null> {
   }
 }
 
+/**
+ * The visitor's address, as the proxy in front of the website saw it, to pass on to the API (which limits requests per
+ * address). Empty when there is none (local development, or called outside a request). Only trustworthy when the website sits
+ * behind a proxy that sets X-Forwarded-For itself: see docs/DEV_SETUP.md.
+ */
+async function visitorAddress(): Promise<Record<string, string>> {
+  try {
+    const h = await requestHeaders();
+    const ip = h.get("x-forwarded-for")?.split(",")[0]?.trim() || h.get("x-real-ip")?.trim();
+    return ip && /^[0-9a-fA-F:.]{3,45}$/.test(ip) ? { "X-Forwarded-For": ip } : {};
+  } catch {
+    return {};
+  }
+}
+
 export type ApiResult<T> =
   | { ok: true; data: T }
   | { ok: false; status: number; code: string; message: string; details?: string[]; info?: Record<string, unknown> };
@@ -40,6 +56,7 @@ export async function apiRequest<T = void>(
       method: opts.method ?? (opts.body === undefined ? "GET" : "POST"),
       cache: "no-store",
       headers: {
+        ...(await visitorAddress()),
         ...opts.headers,
         ...(opts.body !== undefined && { "Content-Type": "application/json" }),
         ...(opts.token && { Authorization: `Bearer ${opts.token}` }),

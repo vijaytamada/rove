@@ -3,6 +3,7 @@ import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { CurrentUser, Public, Roles, type AuthUser } from '../../common/auth.decorators.js';
 import { CitiesService } from './cities.service.js';
 import { CreateCityDto, ListCitiesQuery, UpdateCityDto } from './dto/city.dto.js';
+import { RateLimit } from '../../infra/rate-limit/rate-limit.guard.js';
 
 @ApiTags('cities')
 @Controller()
@@ -11,6 +12,7 @@ export class CitiesController {
 
   /** Public: active cities. */
   @Public()
+  @RateLimit('browse', 300, 60)
   @Get('cities')
   listPublic() {
     return this.cities.listPublic();

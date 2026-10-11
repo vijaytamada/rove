@@ -4,6 +4,7 @@ import { IsBoolean } from 'class-validator';
 import type { Request } from 'express';
 import { CurrentUser, Public, Roles, type AuthUser } from '../../common/auth.decorators.js';
 import { KycService } from './kyc.service.js';
+import { RateLimit } from '../../infra/rate-limit/rate-limit.guard.js';
 
 class StartKycDto {
   @IsBoolean()
@@ -47,6 +48,7 @@ export class KycAdminController {
 /** Where the identity provider reports its answer. Public, but every message must carry a valid signature. */
 @ApiExcludeController()
 @Public()
+@RateLimit('webhook-kyc', 300, 60)
 @Controller('webhooks/kyc')
 export class KycWebhookController {
   constructor(@Inject(KycService) private readonly kyc: KycService) {}

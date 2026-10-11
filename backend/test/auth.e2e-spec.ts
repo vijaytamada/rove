@@ -165,7 +165,9 @@ describe('Auth (e2e)', () => {
       const wrong = await t.http().post('/api/v1/auth/login').send({ email: u.email, password: 'Wrong-Pass-1' }).expect(401);
       const unknown = await t.http().post('/api/v1/auth/login').send({ email: t.email('nobody'), password: 'Wrong-Pass-1' }).expect(401);
       expect(wrong.body.code).toBe('INVALID_CREDENTIALS');
-      expect(unknown.body).toEqual(wrong.body);
+      // Everything but the per-request id is identical, so the error does not reveal whether the email exists.
+      const withoutId = (body: Record<string, unknown>) => Object.fromEntries(Object.entries(body).filter(([k]) => k !== 'requestId'));
+      expect(withoutId(unknown.body)).toEqual(withoutId(wrong.body));
     });
 
     it('never signs a customer in with a password, even if one exists', async () => {

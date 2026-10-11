@@ -59,13 +59,13 @@ export class AuthService {
 
   // ---------------- Staff: email + password ----------------
 
-  async login(dto: LoginDto): Promise<AuthResult> {
-    await this.throttle.assertAllowed(dto.email);
+  async login(dto: LoginDto, ip?: string): Promise<AuthResult> {
+    await this.throttle.assertAllowed(dto.email, ip);
     const user = await this.users.getByEmail(dto.email);
     const ok = await this.passwords.verify(user?.passwordHash ?? null, dto.password);
     // Customers have no password (they use their phone); a customer account never passes here.
     if (!user || !ok || user.role === 'CUSTOMER') {
-      await this.throttle.recordFailure(dto.email);
+      await this.throttle.recordFailure(dto.email, ip);
       throw this.invalidCredentials();
     }
     await this.throttle.reset(dto.email);

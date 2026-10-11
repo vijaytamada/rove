@@ -3,6 +3,7 @@ import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { CurrentUser, Public, Roles, type AuthUser } from '../../common/auth.decorators.js';
 import { CreateStationDto, ListStationsQuery, UpdateStationDto } from './dto/station.dto.js';
 import { StationsService } from './stations.service.js';
+import { RateLimit } from '../../infra/rate-limit/rate-limit.guard.js';
 
 @ApiTags('stations')
 @Controller()
@@ -10,12 +11,14 @@ export class StationsController {
   constructor(@Inject(StationsService) private readonly stations: StationsService) {}
 
   @Public()
+  @RateLimit('browse', 300, 60)
   @Get('cities/:cityId/stations')
   listPublic(@Param('cityId', ParseUUIDPipe) cityId: string) {
     return this.stations.listPublic(cityId);
   }
 
   @Public()
+  @RateLimit('browse', 300, 60)
   @Get('stations/:id')
   getPublic(@Param('id', ParseUUIDPipe) id: string) {
     return this.stations.getPublic(id);

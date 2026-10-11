@@ -24,6 +24,7 @@ import {
 } from './dto/vehicle.dto.js';
 import { VehicleModelsService } from './vehicle-models.service.js';
 import { VehiclesService } from './vehicles.service.js';
+import { RateLimit } from '../../infra/rate-limit/rate-limit.guard.js';
 
 @ApiTags('vehicles')
 @Controller()
@@ -36,12 +37,14 @@ export class VehiclesController {
   // ---- Public ----
 
   @Public()
+  @RateLimit('browse', 300, 60)
   @Get('stations/:stationId/vehicles')
   listPublic(@Param('stationId', ParseUUIDPipe) stationId: string, @Query() query: AvailabilityQuery) {
     return this.vehicles.listPublic(stationId, query);
   }
 
   @Public()
+  @RateLimit('browse', 300, 60)
   @Get('vehicles/:id')
   getPublic(@Param('id', ParseUUIDPipe) id: string) {
     return this.vehicles.getPublic(id);
