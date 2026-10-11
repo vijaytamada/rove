@@ -6,7 +6,8 @@ import { FormMessage } from "@/components/app/FormMessage";
 import { SubmitButton } from "@/components/app/SubmitButton";
 import type { FormState } from "@/lib/form";
 
-export function VerifyForm({ next }: { next: string }) {
+/** `retry` = the customer was rejected and is trying again. */
+export function VerifyForm({ next, retry = false }: { next: string; retry?: boolean }) {
   const [state, action] = useActionState<FormState, FormData>(startKyc, {});
   const error = state.fieldErrors?.consent;
   return (
@@ -30,7 +31,7 @@ export function VerifyForm({ next }: { next: string }) {
           </p>
         )}
       </div>
-      <SubmitButton>Verify me</SubmitButton>
+      <SubmitButton>{retry ? "Try again" : "Verify me"}</SubmitButton>
     </form>
   );
 }

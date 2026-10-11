@@ -110,6 +110,8 @@ enum NotificationType {
   REFUND_SENT // a deposit refund that failed at first went through
   PAYMENT_RECEIVED // an amount owed was paid
   NO_SHOW
+  KYC_VERIFIED // the identity check finished later (the provider's answer came after the customer left the screen)
+  KYC_REJECTED
 }
 
 enum KycStatus {
@@ -136,6 +138,7 @@ model User {
   bookings      Booking[]
   kyc           KycRecord?
   notifications Notification[]
+  auditEntries  AuditLog[]
 
   pickupsHandled Rental[]       @relation("RentalPickupEmployee")
   returnsHandled Rental[]       @relation("RentalReturnEmployee")
@@ -372,6 +375,8 @@ model KycRecord {
   consentAt       DateTime
   verifiedAt      DateTime?
   rejectionReason String?
+  // How many times the customer started the check (a rejected check can be retried a few times).
+  attempts        Int       @default(1)
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
 
@@ -488,4 +493,27 @@ model Notification {
   @@index([userId, createdAt])
   @@index([userId, readAt])
   @@index([bookingId])
+}
+
+// Who did what. Written for staff changes (every successful write by a staff or admin account) and for the identity check.
+// Never holds a request body, a password or an identity number: only the route, ids and a few safe values.
+model AuditLog {
+  id         String   @id @default(uuid()) @db.Uuid
+  // Null when the system acted (a provider's webhook). Kept (set to null) if the account is ever removed.
+  actorId    String?  @db.Uuid
+  actorRole  Role?
+  // A stable code such as BOOKING_PICKUP, SETTLEMENT_COLLECT or KYC_VERIFIED; unknown routes fall back to "METHOD /route".
+  action     String
+  entityType String?
+  entityId   String?
+  // The API route when the entry came from a request, e.g. "POST /station/bookings/:id/pickup".
+  route      String?
+  details    Json?
+  createdAt  DateTime @default(now())
+
+  actor User? @relation(fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([createdAt])
+  @@index([actorId, createdAt])
+  @@index([entityType, entityId])
 }

@@ -14,7 +14,7 @@ import { MockKycProvider } from './mock-kyc.provider.js';
         const kind = config.get('KYC_PROVIDER', { infer: true });
         switch (kind) {
           case 'mock':
-            return new MockKycProvider();
+            return new MockKycProvider(config);
           default:
             throw new Error(`Unknown KYC_PROVIDER: ${String(kind)}`);
         }

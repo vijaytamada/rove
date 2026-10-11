@@ -25,13 +25,13 @@ PostgreSQL via Prisma. This lists expected entities and purpose only. Detailed c
 | **Booking** | 4 | Customer, vehicle, pickup station, start/end window, `status`, code, PIN hash, **pricing snapshot**, totals |
 | **Payment** | 4 | Booking FK, purpose (`RENTAL_AND_DEPOSIT`, `OUTSTANDING`), amount, status, provider, providerRef, idempotency key |
 | **Refund** | 4/6 | Payment FK, amount, status, providerRef, reason (cancellation, deposit return) |
-| **KycRecord** | 4 (mock) / 9 | User FK, provider, providerRef, status, consent timestamp, verifiedAt, rejection reason. **No identity numbers** |
+| **KycRecord** | 4 (mock) / 9 | User FK, provider, providerRef (the current attempt's reference; an older attempt's webhook no longer matches), status, `attempts` (tries used, max 3), consent timestamp, verifiedAt, rejection reason. **No identity numbers** |
 | **Rental** | 5 | 1:1 with Booking: actual start/end, start/end odometer, start/end battery, pickup/return station, pickup/return employee |
 | **DamageRecord** | 5 | Rental FK, phase (`PICKUP`/`RETURN`), description, severity, fee amount, photo URLs |
 | **Settlement** | 6 | Booking FK (1:1), deposit held, total charges, refund amount, outstanding amount, status (`REFUND_PENDING`, `REFUNDED`, `OUTSTANDING`, `CLEARED`, `NO_ACTION`), `settledAt`, `clearedAt` |
 | **SettlementLineItem** | 6 | Settlement FK, type (`EXTRA_KM`, `LATE_FEE`, `DAMAGE`), description, quantity (started km or hours; 1 for damage), unit amount, amount |
 | **Notification** | 8 | User FK (cascade), `type` (`BOOKING_CONFIRMED`, `BOOKING_CANCELLED`, `BOOKING_EXPIRED`, `PICKUP_REMINDER`, `RIDE_STARTED`, `RETURN_REMINDER`, `RETURN_OVERDUE`, `RIDE_COMPLETED`, `REFUND_SENT`, `PAYMENT_RECEIVED`, `NO_SHOW`), title, body (the finished text, in the city's time), optional Booking FK (cascade), `dedupeKey` (unique, `<EVENT>:<bookingId>`: one message per event), `readAt`, `createdAt`. Delivery outside the app is not tracked |
-| **AuditLog** | 2+/9 | Actor, action, entity, before/after summary, ip — for staff actions, KYC, refunds |
+| **AuditLog** | 9 | `actorId` (nullable, set to null if the account is removed), `actorRole`, `action` code, `entityType`, `entityId` (text), `route` (e.g. `POST /station/bookings/:id/pickup`), `details` (small safe JSON), `createdAt`. Indexed by time, by actor and by entity. Never a body, password or identity number |
 | **TelemetryPoint** | 11 | Vehicle FK, ts, lat/lng, speed, battery, odometer, ignition (partition/retention later) |
 | **DeviceMapping / LockEvent** | 12 | IoT device ↔ vehicle; lock/unlock commands and results |
 
@@ -57,7 +57,7 @@ PostgreSQL via Prisma. This lists expected entities and purpose only. Detailed c
 - `DamageRecord` (Phase 5): per rental, `phase` (`PICKUP` = already there, `RETURN` = new), `description`, `severity` (`MINOR`, `MODERATE`, `MAJOR`), flat `feeAmount` in paise entered by staff (charged against the deposit on the Settlement), who recorded it.
 - While a scooter is out, `Vehicle.stationId` is null; returning it sets the return station. `Refund.reason` can be `NO_SHOW`.
 - `Settlement` (Phase 6): 1:1 with `Booking`, created inside the return transaction. Database checks: all amounts >= 0; money goes one way (`refundAmount = 0 OR outstandingAmount = 0`); `refund = max(deposit - charges, 0)` and `outstanding = max(charges - deposit, 0)`; the status only fits the amounts (`REFUND_PENDING`/`REFUNDED` need a refund, `OUTSTANDING`/`CLEARED` need an amount owed, `NO_ACTION` needs neither). `SettlementLineItem`: `amount = quantity x unitAmount`. A partial unique index on `Refund(paymentId)` where `reason = DEPOSIT_RETURN` and `status = SUCCEEDED` allows one successful deposit refund per payment. `Refund.reason` `DEPOSIT_RETURN` is what is left of the deposit after the charges.
-- `KycRecord`: one per user; provider, `providerRef`, `status`, `consentAt`, `verifiedAt`, `rejectionReason`. Never an identity number.
+- `KycRecord`: one per user; provider, `providerRef`, `status`, `attempts`, `consentAt`, `verifiedAt`, `rejectionReason`. Never an identity number.
 
 ## Key relationships
 ```

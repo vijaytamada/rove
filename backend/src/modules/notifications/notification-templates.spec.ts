@@ -2,6 +2,8 @@ import {
   bookingCancelled,
   bookingConfirmed,
   bookingExpired,
+  kycRejected,
+  kycVerified,
   formatClock,
   formatWhen,
   noShow,
@@ -107,6 +109,16 @@ describe('notification messages', () => {
       const m = rideCompleted(facts, bill({ status: 'NO_ACTION', totalCharges: 100_000, refundAmount: 0 }));
       expect(m.body).toContain('nothing is owed');
     });
+  });
+
+  it('identity check results say what happened and what to do next', () => {
+    expect(kycVerified().body).toContain('book a scooter');
+    expect(kycRejected('We could not match your details.', 2).body).toBe(
+      'We could not verify your identity: We could not match your details. You can try again (2 tries left).',
+    );
+    expect(kycRejected(null, 1).body).toContain('(1 try left)');
+    expect(kycRejected('Blurry photo', 0).body).toContain('Please contact support.');
+    expect(kycRejected('Blurry photo', 0).body).not.toContain('try again');
   });
 
   it('refund, payment and no-show messages show the amounts', () => {

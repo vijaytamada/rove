@@ -61,6 +61,16 @@ if (note.items[0]) {
 }
 check("a bad notifications filter is a clean 400", (await j("GET", "/api/v1/notifications?unread=maybe", { token: customer })).status === 400);
 
+// 1c. Audit trail and identity-check reset: super admin only. The KYC webhook is public but refuses unsigned messages.
+check("audit trail readable by admin", (await j("GET", "/api/v1/audit-logs?limit=1", { token: admin })).status === 200);
+for (const [who, token] of [["manager", manager], ["employee", employee], ["customer", customer]]) {
+  check(`${who} cannot read the audit trail`, (await j("GET", "/api/v1/audit-logs", { token })).status === 403);
+  check(`${who} cannot reset an identity check`, (await j("POST", `/api/v1/kyc/${uuid}/reset`, { token, body: {} })).status === 403);
+}
+check("KYC webhook without a signature is refused (401)", (await j("POST", "/api/v1/webhooks/kyc", { body: { providerRef: "x", status: "VERIFIED" } })).status === 401);
+check("KYC webhook with a wrong signature is refused (401)", (await j("POST", "/api/v1/webhooks/kyc", { body: { providerRef: "x", status: "VERIFIED" }, headers: { "x-kyc-signature": "ab".repeat(32) } })).status === 401);
+check("audit trail never shows a password", !/password|passwordHash/i.test((await j("GET", "/api/v1/audit-logs?limit=100", { token: admin })).text));
+
 // 2. Role boundaries on key admin actions.
 check("employee cannot create city", (await j("POST", "/api/v1/cities", { token: employee, body: { name: "x", state: "y" } })).status === 403);
 check("manager cannot create city", (await j("POST", "/api/v1/cities", { token: manager, body: { name: "x", state: "y" } })).status === 403);

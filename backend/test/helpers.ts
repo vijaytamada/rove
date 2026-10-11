@@ -74,7 +74,7 @@ export interface TestApp {
 
 export async function createTestApp(): Promise<TestApp> {
   const moduleRef = await Test.createTestingModule({ imports: [AppModule] }).compile();
-  const app = moduleRef.createNestApplication();
+  const app = moduleRef.createNestApplication({ rawBody: true });
   configureApp(app);
   await app.init();
 
@@ -214,6 +214,9 @@ export async function createTestApp(): Promise<TestApp> {
       if (keys.length) await redis.client.del(...keys);
       // Order matters: refunds -> payments -> bookings -> users; plans and vehicles reference models and cities.
       const ofTestUsers = { user: { id: { in: users.map((u) => u.id) } } };
+      await prisma.auditLog.deleteMany({
+        where: { OR: [{ actorId: { in: users.map((u) => u.id) } }, { entityId: { in: users.map((u) => u.id) } }] },
+      });
       await prisma.settlement.deleteMany({ where: { booking: ofTestUsers } });
       await prisma.rental.deleteMany({ where: { booking: ofTestUsers } });
       await prisma.refund.deleteMany({ where: { payment: { booking: ofTestUsers } } });

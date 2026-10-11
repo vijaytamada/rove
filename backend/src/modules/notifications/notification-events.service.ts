@@ -78,6 +78,21 @@ export class NotificationEventsService {
     return this.raise(bookingId, 'NO_SHOW', 'NO_SHOW', (f) => say.noShow(f, deposit));
   }
 
+  /**
+   * The identity check finished after the customer left the screen (the provider answered later). One message per
+   * attempt. Not tied to a booking.
+   */
+  kycResult(userId: string, result: { status: 'VERIFIED' | 'REJECTED'; attempt: number; reason: string | null; attemptsLeft: number }) {
+    const verified = result.status === 'VERIFIED';
+    return this.notifications.send({
+      userId,
+      type: verified ? 'KYC_VERIFIED' : 'KYC_REJECTED',
+      bookingId: null,
+      dedupeKey: `${verified ? 'KYC_VERIFIED' : 'KYC_REJECTED'}:${userId}:${result.attempt}`,
+      message: verified ? say.kycVerified() : say.kycRejected(result.reason, result.attemptsLeft),
+    });
+  }
+
   // ---- internals ----
 
   private async raise(

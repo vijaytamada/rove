@@ -148,6 +148,8 @@ export interface KycView {
   status: KycStatus;
   verifiedAt: string | null;
   rejectionReason: string | null;
+  /** Tries left if the next one does not work out. 0 = contact support. */
+  attemptsLeft: number;
 }
 
 export type BookingStatus =
@@ -376,7 +378,9 @@ export type NotificationType =
   | "RIDE_COMPLETED"
   | "REFUND_SENT"
   | "PAYMENT_RECEIVED"
-  | "NO_SHOW";
+  | "NO_SHOW"
+  | "KYC_VERIFIED"
+  | "KYC_REJECTED";
 
 export interface NotificationView {
   id: string;
@@ -387,4 +391,17 @@ export interface NotificationView {
   bookingId: string | null;
   readAt: string | null;
   createdAt: string;
+}
+
+export interface AuditEntryView {
+  id: string;
+  createdAt: string;
+  /** A stable code such as BOOKING_PICKUP; unknown ones are "METHOD /route". */
+  action: string;
+  entityType: string | null;
+  entityId: string | null;
+  route: string | null;
+  details: unknown;
+  /** Null when the system acted (a provider webhook). */
+  actor: { id: string; fullName: string; role: Role } | null;
 }

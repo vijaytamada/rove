@@ -44,6 +44,8 @@ Mock payment and KYC: `PAYMENT_PROVIDER=mock` charges nothing (the pay screen ha
 
 Notifications and the minute job: customers get an in-app inbox (bell on the website and in the app). `NOTIFICATION_PROVIDER=mock` only logs each message in the backend console (a real SMS sender comes with Phase 9). The backend also runs a job every minute that expires unpaid holds and sends reminders (`JOBS_ENABLED=true` by default; set `false` to switch it off). It takes a Redis lock, so several backend copies are safe. To see it work by hand: book a scooter, backdate `holdExpiresAt` in the `Booking` row, and within a minute the booking becomes `EXPIRED` and the customer has a notice.
 
+Mock identity check, to try every state: a customer whose name contains `REJECT` is rejected, one whose name contains `PENDING` stays pending until a signed webhook arrives (`POST /api/v1/webhooks/kyc`, header `x-kyc-signature` = hex HMAC-SHA256 of the exact body using `KYC_WEBHOOK_SECRET`), everyone else is verified at once. The audit trail is at http://localhost:3000/admin/audit (super admin).
+
 Mock OTP: verification codes are always `123456` and are logged by the backend. Never enabled in production (the app refuses to start with `OTP_PROVIDER=mock` when `NODE_ENV=production`).
 
 Backend takes ~15–20 s to start. Check it: open `http://localhost:3001/api/v1/health` → `{"status":"ok","checks":{"database":"up","redis":"up"}}`.

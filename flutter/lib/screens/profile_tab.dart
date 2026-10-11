@@ -206,11 +206,11 @@ class _KycRowState extends State<_KycRow> {
                   spacing: 8,
                   crossAxisAlignment: WrapCrossAlignment.center,
                   children: [
-                    const StatusChip('Not verified', tone: ChipTone.warning),
+                    StatusChip(kyc.pending ? 'Being checked' : 'Not verified', tone: ChipTone.warning),
                     TextButton(
                       onPressed: _verify,
                       style: TextButton.styleFrom(padding: EdgeInsets.zero, minimumSize: const Size(0, 32)),
-                      child: const Text('Verify now'),
+                      child: Text(kyc.pending ? 'See status' : (kyc.rejected ? 'Try again' : 'Verify now')),
                     ),
                   ],
                 ),
