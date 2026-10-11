@@ -155,7 +155,8 @@ describe('Audit trail (e2e)', () => {
     it('a customer\'s identity check is recorded (that one is not a staff action)', async () => {
       const c = await t.asRole('CUSTOMER');
       await t.http().post(api('/kyc/start')).set(c.auth).send({ consent: true }).expect(200);
-      expect((await entries({ entityId: c.id, entityType: 'user' })).map((e) => e.action)).toEqual(['KYC_STARTED', 'KYC_VERIFIED']);
+      // Both rows can share a millisecond, so their order is not fixed: compare as a sorted list.
+      expect((await entries({ entityId: c.id, entityType: 'user' })).map((e) => e.action).sort()).toEqual(['KYC_STARTED', 'KYC_VERIFIED']);
     });
   });
 
