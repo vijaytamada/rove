@@ -304,13 +304,25 @@ class BookingView {
 
 /// Identity check state. `NOT_STARTED` means the customer has not begun it.
 class KycView {
-  const KycView({required this.status});
+  const KycView({required this.status, this.rejectionReason, this.attemptsLeft = 3});
 
   final String status;
+  final String? rejectionReason;
+
+  /// Tries left if the next one does not work out. 0 means the customer must contact support.
+  final int attemptsLeft;
 
   bool get verified => status == 'VERIFIED';
 
-  factory KycView.fromJson(Map<String, dynamic> json) => KycView(status: json['status'] as String);
+  /// The provider is still checking; the answer arrives later.
+  bool get pending => status == 'PENDING';
+  bool get rejected => status == 'REJECTED';
+
+  factory KycView.fromJson(Map<String, dynamic> json) => KycView(
+        status: json['status'] as String,
+        rejectionReason: json['rejectionReason'] as String?,
+        attemptsLeft: (json['attemptsLeft'] as num?)?.toInt() ?? 3,
+      );
 }
 
 enum BookingTab {

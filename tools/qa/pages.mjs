@@ -64,6 +64,7 @@ const routes = [
   ["/bookings/00000000-0000-4000-8000-000000000000/settle", { anon: "login", customer: "404", employee: "to:/staff", manager: "to:/admin", admin: "to:/admin" }],
   ["/bookings/not-a-uuid/settle", { anon: "login", customer: "404", employee: "to:/staff", manager: "to:/admin", admin: "to:/admin" }],
   ["/notifications", { anon: "login", customer: "ok", employee: "to:/staff", manager: "to:/admin", admin: "to:/admin" }],
+  ["/admin/audit", { anon: "staff-login", customer: "to:/", employee: "to:/staff", manager: "to:/admin", admin: "ok" }],
   ["/verify", { anon: "login", customer: "ok", employee: "to:/staff", manager: "to:/admin", admin: "to:/admin" }],
   [`/book/${vehBlr.id}`, { anon: "ok", customer: "ok", employee: "ok", manager: "ok", admin: "ok" }],
   ["/book/not-a-uuid", { anon: "404", customer: "404", employee: "404", manager: "404", admin: "404" }],
@@ -148,5 +149,8 @@ checks.push(["customer notifications page renders (inbox or its empty note)", /N
 const html = async (path, token) => (await fetch(WEB + path, { headers: { Cookie: `rove_at=${token}` } })).text();
 checks.push(["customer header has the bell", /aria-label="Notifications/.test(await html("/", tokens.customer))]);
 checks.push(["staff header has no bell", !/aria-label="Notifications/.test(await html("/", tokens.employee))]);
+const t28 = await text("/admin/audit", tokens.admin);
+checks.push(["admin audit trail page lists who did what", /Audit trail/.test(t28) && (/Nothing recorded/.test(t28) || /Handed a scooter over|Took a scooter back|Identity|Added|Changed|System/.test(t28))]);
+checks.push(["only admins see the audit link in the console", /Audit trail/.test(await text("/admin", tokens.admin)) && !/Audit trail/.test(await text("/admin", tokens.manager))]);
 for (const [name, ok] of checks) { console.log(`${ok ? "PASS" : "FAIL"}  ${name}`); if (!ok) failures++; }
 process.exit(failures ? 1 : 0);

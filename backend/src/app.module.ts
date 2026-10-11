@@ -5,6 +5,7 @@ import { PrismaModule } from './infra/prisma/prisma.module.js';
 import { RedisModule } from './infra/redis/redis.module.js';
 import { BookingsModule } from './modules/bookings/bookings.module.js';
 import { CitiesModule } from './modules/cities/cities.module.js';
+import { AuditModule } from './modules/audit/audit.module.js';
 import { AuthModule } from './modules/auth/auth.module.js';
 import { HealthModule } from './modules/health/health.module.js';
 import { StationsModule } from './modules/stations/stations.module.js';
@@ -29,6 +30,7 @@ import { UsersModule } from './modules/users/users.module.js';
     PrismaModule,
     RedisModule,
     RbacModule,
+    AuditModule,
     UsersModule,
     AuthModule,
     CitiesModule,

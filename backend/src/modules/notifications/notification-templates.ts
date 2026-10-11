@@ -147,6 +147,19 @@ export function paymentReceived(f: BookingFacts, amount: number): Message {
   };
 }
 
+export function kycVerified(): Message {
+  return { title: 'Identity verified', body: 'You are verified. You can book a scooter now.' };
+}
+
+export function kycRejected(reason: string | null, attemptsLeft: number): Message {
+  const why = reason ? `: ${reason.replace(/\.$/, '')}` : '';
+  const next =
+    attemptsLeft > 0
+      ? `You can try again (${attemptsLeft} ${attemptsLeft === 1 ? 'try' : 'tries'} left).`
+      : 'Please contact support.';
+  return { title: 'Verification did not go through', body: `We could not verify your identity${why}. ${next}` };
+}
+
 export function noShow(f: BookingFacts, deposit: { amount: number; sent: boolean }): Message {
   const head = `You did not collect ${f.vehicleCode}, so booking ${f.code} was closed as a no-show.`;
   if (deposit.amount <= 0) return { title: 'Pick-up missed', body: `${head} The rental charge is kept.` };

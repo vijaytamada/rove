@@ -15,6 +15,8 @@ const envSchema = z
     OTP_PROVIDER: z.enum(['mock']).default('mock'),
     KYC_PROVIDER: z.enum(['mock']).default('mock'),
     PAYMENT_PROVIDER: z.enum(['mock']).default('mock'),
+    /** Signs the identity provider's webhook (HMAC-SHA256). A real provider's secret goes here in production. */
+    KYC_WEBHOOK_SECRET: z.string().min(16, 'must be at least 16 characters').default('dev-only-kyc-webhook-secret'),
     /** The mock only logs. In-app notifications work with any value; a real SMS or push sender is added later. */
     NOTIFICATION_PROVIDER: z.enum(['mock']).default('mock'),
     /** Runs the background job (expire unpaid holds, send reminders) every minute. Turned off in tests. */
@@ -31,6 +33,13 @@ const envSchema = z
       ctx.addIssue({
         code: 'custom',
         path: ['JWT_ACCESS_SECRET'],
+        message: 'a dev-only secret must not be used in production',
+      });
+    }
+    if (env.KYC_WEBHOOK_SECRET.startsWith('dev-only')) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['KYC_WEBHOOK_SECRET'],
         message: 'a dev-only secret must not be used in production',
       });
     }

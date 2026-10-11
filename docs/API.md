@@ -74,7 +74,7 @@ Public:
 Customers only (`CUSTOMER`; staff get 403):
 | Endpoint | Notes |
 |---|---|
-| `GET /kyc/status` · `POST /kyc/start` | Mock identity check. `start` needs `{ consent: true }` (`CONSENT_REQUIRED`) and verifies at once. Status `NOT_STARTED / PENDING / VERIFIED / REJECTED` |
+| `GET /kyc/status` · `POST /kyc/start` | Identity check (mock provider until Phase 9 picks a vendor). `start` needs `{ consent: true }` (`CONSENT_REQUIRED`). Status `NOT_STARTED / PENDING / VERIFIED / REJECTED`, plus `verifiedAt`, `rejectionReason` and `attemptsLeft`. See *Phase 9 - identity check lifecycle and audit trail* below for pending checks, retries and the webhook |
 | `POST /bookings` | Same body as the quote. Needs a verified identity (`KYC_REQUIRED` 403). Holds the scooter for 10 minutes (`PENDING_PAYMENT`, `holdExpiresAt`). 409 `VEHICLE_NOT_AVAILABLE`, `OVERLAPPING_BOOKING` (you already have one then), `TOO_MANY_BOOKINGS` (5 open at once), `STATION_CLOSED` (start outside opening hours), `NO_PRICING_PLAN` |
 | `POST /bookings/:id/pay` | Mock checkout. Optional `Idempotency-Key` header (8-100 chars): the same key never charges twice (`IDEMPOTENCY_KEY_REUSED` if it belongs to another booking). Body `{ simulate: 'FAIL' }` makes the mock decline (never in production). Success: `CONFIRMED` with the PIN. 402 `PAYMENT_FAILED` keeps the hold so the customer can retry. 409 `ALREADY_PAID`, `PAYMENT_IN_PROGRESS`, `HOLD_EXPIRED` (a payment that lands after the hold ran out is refunded at once) |
 | `GET /bookings?tab=active\|upcoming\|past&page&limit` · `GET /bookings/:id` | Own bookings only (404 for others). Active = waiting for payment, started or in progress; upcoming = paid, not started; past = finished. A booking view has `code` (RV-XXXXXX), `pin` (only when confirmed/in progress), amounts, the agreed `pricing` snapshot, `payment`, `refundedAmount` and `cancellation { allowed, refundAmount, retainedAmount }` (what cancelling right now would do, so clients never work out money) |
@@ -155,8 +155,22 @@ A customer's inbox. Every signed-in user has their own (staff get no messages ye
 
 Codes added: `NOTIFICATION_NOT_FOUND`.
 
-### Phase 9+
-`POST /webhooks/payments` · `POST /webhooks/kyc` · `POST /telemetry` · `GET /fleet/live` · lock/unlock endpoints — designed in their phases.
+### Phase 9 - identity check lifecycle and audit trail
+The vendor-independent half of Phase 9 (the real SMS and identity vendors wait for the owner's choice and legal review).
+
+**Identity check states.** `POST /kyc/start` runs the provider. It may answer at once (`VERIFIED` or `REJECTED`) or `PENDING` (a hosted check that finishes later). Rules (`modules/kyc/kyc-rules.ts`): a verified customer is left alone; a check that is still `PENDING` is not started twice, but after 15 minutes without an answer it may be started again; a rejected or abandoned check can be started again up to **3 tries in total**, then 409 `KYC_ATTEMPTS_EXCEEDED` ("contact support"). Each start is one `attempt`; `attemptsLeft` is returned on `GET /kyc/status` and `POST /kyc/start`. Booking still needs `VERIFIED` (403 `KYC_REQUIRED`, also while pending).
+
+| Route | Who | What it does |
+|---|---|---|
+| `POST /webhooks/kyc` | the identity provider (public) | The provider's answer. The body must be signed: the mock provider reads `x-kyc-signature` = hex HMAC-SHA256 of the exact bytes with `KYC_WEBHOOK_SECRET` (a real vendor's adapter reads its own header). Missing or wrong signature: 401 `INVALID_SIGNATURE`; unreadable body: 400 `INVALID_WEBHOOK`. A valid message that changes nothing (a repeat, a late contradiction, an old attempt's reference, an unknown reference, a non-final status) is accepted with `{ received: true }` so the provider stops retrying. Only a `PENDING` check changes (to `VERIFIED` or `REJECTED`); the customer gets a `KYC_VERIFIED` or `KYC_REJECTED` notification and the audit trail records it as done by the system |
+| `POST /kyc/:userId/reset` | super admin | Gives a customer who ran out of tries a fresh set (attempts back to 0; a stuck `PENDING` is closed as rejected). 409 `KYC_ALREADY_VERIFIED`, 404 `KYC_NOT_FOUND`. There is no screen for it yet |
+
+**Mock provider** (development only): a customer whose name contains `REJECT` is rejected, one whose name contains `PENDING` stays pending until a signed webhook answers, everyone else is verified at once. The webhook body is `{ "providerRef": "...", "status": "VERIFIED" | "REJECTED", "rejectionReason": "..." }`. `tools/` has no script for it; sign with Node `crypto.createHmac('sha256', secret).update(rawBody).digest('hex')`.
+
+**Audit trail.** `GET /audit-logs?actorId&action&entityType&entityId&page&limit` (super admin only), newest first. Each item: `id`, `createdAt`, `action`, `entityType`, `entityId`, `route`, `details`, `actor` (`{ id, fullName, role }` or null when the system acted). Every **successful write by a staff, manager or admin account** is recorded automatically by an interceptor (so a new endpoint is audited without extra code), plus the customer's identity-check events. Reads, failed attempts, a customer's own actions (those are in the booking and payment tables), sign-in, a person editing their own name and the inbox are not recorded. Codes: `BOOKING_PICKUP`, `BOOKING_RETURN`, `BOOKING_NO_SHOW`, `SETTLEMENT_COLLECT`, `SETTLEMENT_RETRY_REFUND`, `STAFF_CREATE|UPDATE|ASSIGN`, `PRICING_PLAN_CREATE|UPDATE`, `VEHICLE_CREATE|UPDATE|STATUS|RETIRE`, `VEHICLE_MODEL_CREATE|UPDATE`, `CITY_CREATE|UPDATE`, `STATION_CREATE|UPDATE`, `KYC_STARTED|VERIFIED|REJECTED|RESET`; any other route is recorded as `"METHOD /route"`. **Never stored:** request bodies, passwords, phone numbers, names, identity numbers; `details` is limited to an allow-list of numbers and enums (e.g. the new price fields, a scooter's new status, a staff account's new status, the identity-check attempt number). Codes added: `KYC_ATTEMPTS_EXCEEDED`, `KYC_NOT_FOUND`, `KYC_ALREADY_VERIFIED`, `INVALID_SIGNATURE`, `INVALID_WEBHOOK`.
+
+### Phase 9+ (still to come)
+`POST /webhooks/payments` · `POST /telemetry` · `GET /fleet/live` · lock/unlock endpoints — designed in their phases.
 
 ## Access
 Per-endpoint role/scope rules: see `docs/RBAC.md`.

@@ -119,7 +119,7 @@ export async function startKyc(_prev: FormState, form: FormData): Promise<FormSt
 
   const res = await apiRequest<KycView>("/kyc/start", { body: { consent: true }, token });
   if (!res.ok) return failure(res);
-  if (res.data.status === "REJECTED") return { error: res.data.rejectionReason ?? "We couldn't verify your identity." };
   revalidatePath("/", "layout");
-  redirect(next);
+  // Verified: carry on. Still being checked, or rejected: the verify page shows that state (and offers a retry).
+  redirect(res.data.status === "VERIFIED" ? next : `/verify?next=${encodeURIComponent(next)}`);
 }

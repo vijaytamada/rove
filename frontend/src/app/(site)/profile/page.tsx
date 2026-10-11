@@ -68,9 +68,9 @@ export default async function ProfilePage() {
                   <StatusChip tone="success">Verified</StatusChip>
                 ) : (
                   <div className="flex flex-wrap items-center gap-3">
-                    <StatusChip tone="warning">Not verified</StatusChip>
+                    <StatusChip tone="warning">{kyc.status === "PENDING" ? "Being checked" : "Not verified"}</StatusChip>
                     <Link href="/verify?next=/profile" className="text-sm font-medium underline">
-                      Verify now
+                      {kyc.status === "PENDING" ? "See status" : kyc.status === "REJECTED" ? "Try again" : "Verify now"}
                     </Link>
                   </div>
                 )}
