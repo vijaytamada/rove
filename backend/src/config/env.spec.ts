@@ -13,6 +13,13 @@ describe('validateEnv', () => {
     expect(env.NODE_ENV).toBe('development');
     expect(env.JWT_ACCESS_TTL).toBe('15m');
     expect(env.OTP_PROVIDER).toBe('mock');
+    expect(env.NOTIFICATION_PROVIDER).toBe('mock');
+    expect(env.JOBS_ENABLED).toBe(true);
+  });
+
+  it('reads JOBS_ENABLED as a boolean', () => {
+    expect(validateEnv({ ...base, JOBS_ENABLED: 'false' }).JOBS_ENABLED).toBe(false);
+    expect(() => validateEnv({ ...base, JOBS_ENABLED: 'maybe' })).toThrow(/JOBS_ENABLED/);
   });
 
   it('coerces PORT to a number', () => {

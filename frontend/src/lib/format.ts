@@ -18,6 +18,19 @@ const dayOnly = (tz: string) =>
 const timeOnly = (tz: string) =>
   new Intl.DateTimeFormat("en-IN", { timeZone: tz, hour: "numeric", minute: "2-digit", hour12: true });
 
+/** "Just now", "5 min ago", "3 h ago", "Yesterday", then "9 Oct". `now` is passed in so the result is predictable. */
+export function formatAgo(iso: string, now: Date, tz = "Asia/Kolkata"): string {
+  const then = new Date(iso);
+  const minutes = Math.floor((now.getTime() - then.getTime()) / 60_000);
+  if (minutes < 1) return "Just now";
+  if (minutes < 60) return `${minutes} min ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours} h ago`;
+  const day = (d: Date) => new Intl.DateTimeFormat("en-CA", { timeZone: tz }).format(d);
+  if (day(new Date(now.getTime() - 86_400_000)) === day(then)) return "Yesterday";
+  return new Intl.DateTimeFormat("en-IN", { timeZone: tz, day: "numeric", month: "short" }).format(then);
+}
+
 /** "Fri, 9 Oct, 10:30 am" */
 export const formatDateTime = (iso: string, tz: string) => dateTime(tz).format(new Date(iso)).replace(/\b(am|pm)\b/i, (m) => m.toLowerCase());
 

@@ -15,6 +15,13 @@ const envSchema = z
     OTP_PROVIDER: z.enum(['mock']).default('mock'),
     KYC_PROVIDER: z.enum(['mock']).default('mock'),
     PAYMENT_PROVIDER: z.enum(['mock']).default('mock'),
+    /** The mock only logs. In-app notifications work with any value; a real SMS or push sender is added later. */
+    NOTIFICATION_PROVIDER: z.enum(['mock']).default('mock'),
+    /** Runs the background job (expire unpaid holds, send reminders) every minute. Turned off in tests. */
+    JOBS_ENABLED: z
+      .enum(['true', 'false'])
+      .default('true')
+      .transform((v) => v === 'true'),
     /** Total OTP sends per day across all phones (guards against SMS pumping and runaway cost). */
     OTP_DAILY_SEND_CAP: z.coerce.number().int().positive().default(5000),
   })

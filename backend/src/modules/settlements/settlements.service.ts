@@ -1,9 +1,11 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { AppException } from '../../common/app-exception.js';
 import type { AuthUser } from '../../common/auth.decorators.js';
+import { formatRupees } from '../../common/money.js';
 import { pageArgs, type Page } from '../../common/page-query.dto.js';
 import { Prisma } from '../../generated/prisma/client.js';
 import { PrismaService } from '../../infra/prisma/prisma.service.js';
+import { NotificationEventsService } from '../notifications/notification-events.service.js';
 import { PaymentsService } from '../payments/payments.service.js';
 import { ScopeService } from '../rbac/scope.service.js';
 import type { PlanRates } from '../pricing/rental-quote.js';
@@ -71,6 +73,7 @@ export class SettlementsService {
     @Inject(PrismaService) private readonly prisma: PrismaService,
     @Inject(PaymentsService) private readonly payments: PaymentsService,
     @Inject(ScopeService) private readonly scopes: ScopeService,
+    @Inject(NotificationEventsService) private readonly events: NotificationEventsService,
   ) {}
 
   // ---- creating (called by the step that takes the scooter back) ----
@@ -213,6 +216,7 @@ export class SettlementsService {
     }
     const ok = await this.finishRefund(settlementId);
     if (!ok) throw new AppException(502, 'REFUND_FAILED', 'The refund did not go through. Try again in a moment.');
+    await this.events.refundSent(s.bookingId);
     return this.staffView(user, settlementId);
   }
 
@@ -297,6 +301,7 @@ export class SettlementsService {
       await tx.settlement.updateMany({ where: { id: settlementId, status: 'OUTSTANDING' }, data: { status: 'CLEARED', clearedAt: paidAt } });
     });
     const done = await this.prisma.settlement.findUniqueOrThrow({ where: { id: settlementId }, include: SETTLEMENT_INCLUDE });
+    await this.events.paymentReceived(done.bookingId, payment.chargeAmount);
     return toSettlementView(done);
   }
 
@@ -341,6 +346,3 @@ function toStaffView(row: StaffSettlementRow): StaffSettlementView {
     },
   };
 }
-
-const formatRupees = (paise: number): string =>
-  `₹${(paise / 100).toLocaleString('en-IN', { maximumFractionDigits: 2, minimumFractionDigits: paise % 100 === 0 ? 0 : 2 })}`;

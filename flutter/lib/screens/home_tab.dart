@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../api/booking_api.dart';
+import '../api/notification_api.dart';
 import '../auth/auth_controller.dart';
 import '../models/booking.dart';
 import '../format.dart';
@@ -9,6 +10,7 @@ import '../theme/tokens.dart';
 import '../widgets/booking_cards.dart';
 import '../widgets/wordmark.dart';
 import 'booking_detail_screen.dart';
+import 'notifications_screen.dart';
 import 'settle_screen.dart';
 
 class HomeTab extends StatefulWidget {
@@ -23,6 +25,7 @@ class HomeTab extends StatefulWidget {
 
 class _HomeTabState extends State<HomeTab> {
   CustomerDashboard? _dash;
+  int _unread = 0;
   bool _started = false;
 
   @override
@@ -45,9 +48,20 @@ class _HomeTabState extends State<HomeTab> {
     final auth = AuthScope.of(context);
     if (auth.user?.role != Role.customer) return;
     final (dash, _) = await BookingApi(auth.api).dashboard();
+    final unread = await NotificationApi(auth.api).unreadCount();
     if (!mounted) return;
     // Keep what is on screen if the call failed (offline): an empty home would look like the bookings are gone.
-    if (dash != null) setState(() => _dash = dash);
+    if (dash != null || unread != null) {
+      setState(() {
+        if (dash != null) _dash = dash;
+        if (unread != null) _unread = unread;
+      });
+    }
+  }
+
+  Future<void> _openNotifications() async {
+    await Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => const NotificationsScreen()));
+    if (mounted) _loadNext();
   }
 
   /// Opens the pay-what-you-owe screen for the ride the banner is about.
@@ -68,7 +82,24 @@ class _HomeTabState extends State<HomeTab> {
     final next = dash?.next;
 
     return Scaffold(
-      appBar: AppBar(title: const Wordmark(), centerTitle: false),
+      appBar: AppBar(
+        title: const Wordmark(),
+        centerTitle: false,
+        actions: [
+          if (!staff)
+            IconButton(
+              tooltip: _unread > 0 ? 'Notifications, $_unread unread' : 'Notifications',
+              onPressed: _openNotifications,
+              icon: Badge(
+                isLabelVisible: _unread > 0,
+                label: Text(_unread > 9 ? '9+' : '$_unread'),
+                backgroundColor: Tokens.accent,
+                child: const Icon(Icons.notifications_none),
+              ),
+            ),
+          const SizedBox(width: 4),
+        ],
+      ),
       body: RefreshIndicator(
         onRefresh: _loadNext,
         child: ListView(

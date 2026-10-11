@@ -63,6 +63,7 @@ const routes = [
   ["/bookings/00000000-0000-4000-8000-000000000000/pay", { anon: "login", customer: "404", employee: "to:/staff", manager: "to:/admin", admin: "to:/admin" }],
   ["/bookings/00000000-0000-4000-8000-000000000000/settle", { anon: "login", customer: "404", employee: "to:/staff", manager: "to:/admin", admin: "to:/admin" }],
   ["/bookings/not-a-uuid/settle", { anon: "login", customer: "404", employee: "to:/staff", manager: "to:/admin", admin: "to:/admin" }],
+  ["/notifications", { anon: "login", customer: "ok", employee: "to:/staff", manager: "to:/admin", admin: "to:/admin" }],
   ["/verify", { anon: "login", customer: "ok", employee: "to:/staff", manager: "to:/admin", admin: "to:/admin" }],
   [`/book/${vehBlr.id}`, { anon: "ok", customer: "ok", employee: "ok", manager: "ok", admin: "ok" }],
   ["/book/not-a-uuid", { anon: "404", customer: "404", employee: "404", manager: "404", admin: "404" }],
@@ -142,5 +143,10 @@ const t23 = await text("/staff", tokens.employee);
 checks.push(["station desk shows the station's numbers", /Waiting for pickup/.test(t23) && /Owed by customers/.test(t23) && /Refunds not sent/.test(t23)]);
 const t24 = await text("/admin?range=1d", tokens.admin);
 checks.push(["the 24 hour window is labelled", /Activity, the last 24 hours/.test(t24) && /Money, the last 24 hours/.test(t24)]);
+const t25 = await text("/notifications", tokens.customer);
+checks.push(["customer notifications page renders (inbox or its empty note)", /Notifications/.test(t25) && (/Nothing yet/.test(t25) || /View booking|Mark as read|ago|Just now|Yesterday/.test(t25))]);
+const html = async (path, token) => (await fetch(WEB + path, { headers: { Cookie: `rove_at=${token}` } })).text();
+checks.push(["customer header has the bell", /aria-label="Notifications/.test(await html("/", tokens.customer))]);
+checks.push(["staff header has no bell", !/aria-label="Notifications/.test(await html("/", tokens.employee))]);
 for (const [name, ok] of checks) { console.log(`${ok ? "PASS" : "FAIL"}  ${name}`); if (!ok) failures++; }
 process.exit(failures ? 1 : 0);

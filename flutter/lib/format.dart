@@ -57,6 +57,19 @@ String _time(DateTime w) {
   return '$hour:${w.minute.toString().padLeft(2, '0')} ${w.hour < 12 ? 'am' : 'pm'}';
 }
 
+/// "Just now", "5 min ago", "3 h ago", "Yesterday", then "9 Oct". Days are counted on the India clock, like the website.
+String formatAgo(DateTime utc, DateTime now, {String timeZone = 'Asia/Kolkata'}) {
+  final minutes = now.difference(utc).inMinutes;
+  if (minutes < 1) return 'Just now';
+  if (minutes < 60) return '$minutes min ago';
+  final hours = minutes ~/ 60;
+  if (hours < 24) return '$hours h ago';
+  final then = toCityTime(utc, timeZone);
+  final yesterday = toCityTime(now.subtract(const Duration(days: 1)), timeZone);
+  if (then.year == yesterday.year && then.month == yesterday.month && then.day == yesterday.day) return 'Yesterday';
+  return '${then.day} ${_months[then.month - 1]}';
+}
+
 /// "Fri, 9 Oct, 10:30 am"
 String formatDateTime(DateTime utc, String timeZone) {
   final w = toCityTime(utc, timeZone);

@@ -98,6 +98,20 @@ enum DamageSeverity {
   MAJOR
 }
 
+enum NotificationType {
+  BOOKING_CONFIRMED
+  BOOKING_CANCELLED
+  BOOKING_EXPIRED // the 10-minute payment hold ran out
+  PICKUP_REMINDER
+  RIDE_STARTED
+  RETURN_REMINDER
+  RETURN_OVERDUE
+  RIDE_COMPLETED // the final bill: refund on its way, amount owed or nothing to move
+  REFUND_SENT // a deposit refund that failed at first went through
+  PAYMENT_RECEIVED // an amount owed was paid
+  NO_SHOW
+}
+
 enum KycStatus {
   PENDING
   VERIFIED
@@ -121,6 +135,7 @@ model User {
   assignments   StaffAssignment[]
   bookings      Booking[]
   kyc           KycRecord?
+  notifications Notification[]
 
   pickupsHandled Rental[]       @relation("RentalPickupEmployee")
   returnsHandled Rental[]       @relation("RentalReturnEmployee")
@@ -301,8 +316,9 @@ model Booking {
   vehicle    Vehicle     @relation(fields: [vehicleId], references: [id], onDelete: Restrict)
   station    Station     @relation(fields: [stationId], references: [id], onDelete: Restrict)
   payments   Payment[]
-  rental     Rental?
-  settlement Settlement?
+  rental        Rental?
+  settlement    Settlement?
+  notifications Notification[]
 
   @@index([userId, createdAt])
   @@index([userId, status])
@@ -450,4 +466,26 @@ model SettlementLineItem {
   settlement Settlement @relation(fields: [settlementId], references: [id], onDelete: Cascade)
 
   @@index([settlementId])
+}
+
+// A message to a customer, kept so it can be shown in the app and on the website. Delivery outside the app (SMS, push,
+// email) goes through the NotificationProvider and is not tracked here. `dedupeKey` makes every event send once, even if
+// the code that raises it runs twice (reminders, retries).
+model Notification {
+  id        String           @id @default(uuid()) @db.Uuid
+  userId    String           @db.Uuid
+  type      NotificationType
+  title     String
+  body      String
+  bookingId String?          @db.Uuid
+  dedupeKey String           @unique
+  readAt    DateTime?
+  createdAt DateTime         @default(now())
+
+  user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  booking Booking? @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@index([userId, readAt])
+  @@index([bookingId])
 }
