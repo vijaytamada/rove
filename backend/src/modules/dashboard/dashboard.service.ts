@@ -1,11 +1,13 @@
 import { Inject, Injectable } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { AppException } from '../../common/app-exception.js';
+import { TtlCache } from '../../common/ttl-cache.js';
+import type { Env } from '../../config/env.js';
 import type { AuthUser } from '../../common/auth.decorators.js';
 import { Prisma } from '../../generated/prisma/client.js';
 import { PrismaService } from '../../infra/prisma/prisma.service.js';
 import type { BookingView } from '../bookings/booking-views.js';
 import { BookingsService } from '../bookings/bookings.service.js';
-import type { ListBookingsQuery } from '../bookings/dto/booking.dto.js';
 import { ScopeService } from '../rbac/scope.service.js';
 import { resolveWindow, utilizationPercent, type DashboardWindow, type RangeKey } from './dashboard-rules.js';
 
@@ -72,34 +74,42 @@ type Ids = string[] | undefined;
 
 @Injectable()
 export class DashboardService {
+  /** The raw numbers per slice, kept a few seconds: the heavy part of every staff dashboard, and the same for everyone who asks. */
+  private readonly numbers: TtlCache<{ raw: Map<string, RawNumbers>; window: DashboardWindow }>;
+
   constructor(
     @Inject(PrismaService) private readonly prisma: PrismaService,
     @Inject(ScopeService) private readonly scopes: ScopeService,
     @Inject(BookingsService) private readonly bookings: BookingsService,
-  ) {}
+    @Inject(ConfigService) config: ConfigService<Env, true>,
+  ) {
+    this.numbers = new TtlCache(config.get('DASHBOARD_CACHE_SECONDS', { infer: true }) * 1000);
+  }
+
+  /** The numbers for `ids` (undefined = every station) over a range, from the short-lived cache when it is fresh enough. */
+  private async rawFor(ids: Ids, range: RangeKey, now: Date) {
+    const key = `${range}:${ids ? [...ids].sort().join(',') : '*'}`;
+    return this.numbers.get(key, async () => {
+      const window = resolveWindow(range, now);
+      return { raw: await this.rawByStation(ids, window, now), window };
+    });
+  }
 
   // ---- staff dashboards ----
 
   /** Everything, with a row per city. */
   async admin(range: RangeKey, now = new Date()) {
-    const window = resolveWindow(range, now);
-    const [metrics, cities] = await Promise.all([this.metrics(undefined, window, now), this.prisma.city.findMany({ orderBy: { name: 'asc' } })]);
-    const rows = await Promise.all(
-      cities.map(async (c): Promise<CityRow> => {
-        const ids = await this.stationIds({ cityId: c.id });
-        const m = await this.metrics(ids, window, now);
-        return {
-          id: c.id,
-          name: c.name,
-          stations: ids.length,
-          fleet: m.fleet,
-          utilizationPercent: m.utilizationPercent,
-          money: m.money,
-          now: pickNow(m),
-        };
-      }),
-    );
-    return { ...metrics, cities: rows };
+    const [{ raw, window }, cities, stations] = await Promise.all([
+      this.rawFor(undefined, range, now),
+      this.prisma.city.findMany({ orderBy: { name: 'asc' } }),
+      this.prisma.station.findMany({ select: { id: true, cityId: true } }),
+    ]);
+    const rows = cities.map((c): CityRow => {
+      const ids = stations.filter((st) => st.cityId === c.id).map((st) => st.id);
+      const m = toMetrics(ids.map((id) => raw.get(id) ?? emptyRaw()), window);
+      return { id: c.id, name: c.name, stations: ids.length, fleet: m.fleet, utilizationPercent: m.utilizationPercent, money: m.money, now: pickNow(m) };
+    });
+    return { ...toMetrics(stations.map((st) => raw.get(st.id) ?? emptyRaw()), window), cities: rows };
   }
 
   /** One city, with a row per station. Managers see their own cities; admins any. */
@@ -108,19 +118,13 @@ export class DashboardService {
     if (!city) throw new AppException(404, 'CITY_NOT_FOUND', 'City not found.');
     await this.scopes.assertCityAccess(user, cityId);
 
-    const window = resolveWindow(range, now);
     const stations = await this.prisma.station.findMany({ where: { cityId }, select: { id: true, name: true }, orderBy: { name: 'asc' } });
-    const ids = stations.map((s) => s.id);
-    const [metrics, rows] = await Promise.all([
-      this.metrics(ids, window, now),
-      Promise.all(
-        stations.map(async (s): Promise<StationRow> => {
-          const m = await this.metrics([s.id], window, now);
-          return { stationId: s.id, id: s.id, name: s.name, fleet: m.fleet, utilizationPercent: m.utilizationPercent, money: m.money, now: pickNow(m) };
-        }),
-      ),
-    ]);
-    return { city, ...metrics, stations: rows };
+    const { raw, window } = await this.rawFor(stations.map((s) => s.id), range, now);
+    const rows = stations.map((s): StationRow => {
+      const m = toMetrics([raw.get(s.id) ?? emptyRaw()], window);
+      return { stationId: s.id, id: s.id, name: s.name, fleet: m.fleet, utilizationPercent: m.utilizationPercent, money: m.money, now: pickNow(m) };
+    });
+    return { city, ...toMetrics(stations.map((s) => raw.get(s.id) ?? emptyRaw()), window), stations: rows };
   }
 
   /** One station and its queue: who is waiting for a scooter and who is out. */
@@ -130,9 +134,8 @@ export class DashboardService {
       where: { id: stationId },
       select: { id: true, name: true, city: { select: { id: true, name: true, timezone: true } } },
     });
-    const window = resolveWindow(range, now);
-    const [metrics, pickups, rides] = await Promise.all([
-      this.metrics([stationId], window, now),
+    const [{ raw, window }, pickups, rides] = await Promise.all([
+      this.rawFor([stationId], range, now),
       this.prisma.booking.findMany({
         where: { stationId, status: 'CONFIRMED', endAt: { gt: now } },
         orderBy: { startAt: 'asc' },
@@ -157,7 +160,7 @@ export class DashboardService {
     });
     return {
       station: { id: station.id, name: station.name, cityId: station.city.id, cityName: station.city.name, timezone: station.city.timezone },
-      ...metrics,
+      ...toMetrics([raw.get(stationId) ?? emptyRaw()], window),
       queue: { pickups: pickups.map(item), rides: rides.map(item) },
     };
   }
@@ -166,12 +169,8 @@ export class DashboardService {
 
   /** A customer's own home: what needs attention, what is next, recent rides, what they owe. */
   async customer(user: AuthUser, now = new Date()): Promise<CustomerDashboard> {
-    const list = async (tab: 'active' | 'upcoming' | 'past', limit: number) =>
-      (await this.bookings.list(user, { tab, limit, page: 1 } as ListBookingsQuery, now)).items;
-    const [active, upcoming, recent, owed, ride] = await Promise.all([
-      list('active', 1),
-      list('upcoming', 1),
-      list('past', 3),
+    const [{ active, upcoming, recent }, owed, ride] = await Promise.all([
+      this.bookings.homeBookings(user, now),
       this.prisma.settlement.findFirst({
         where: { status: 'OUTSTANDING', booking: { is: { userId: user.id } } },
         select: { bookingId: true, outstandingAmount: true },
@@ -183,8 +182,8 @@ export class DashboardService {
         WHERE b."userId" = ${user.id}::uuid AND r."endedAt" IS NOT NULL`,
     ]);
     return {
-      active: active[0] ?? null,
-      upcoming: upcoming[0] ?? null,
+      active,
+      upcoming,
       recent,
       owed: owed ? { bookingId: owed.bookingId, amount: owed.outstandingAmount } : null,
       stats: { rides: Number(ride[0]?.rides ?? 0), distanceKm: Math.round((ride[0]?.km ?? 0) * 10) / 10 },
@@ -193,79 +192,174 @@ export class DashboardService {
 
   // ---- the numbers ----
 
-  private async stationIds(where: Prisma.StationWhereInput): Promise<string[]> {
-    return (await this.prisma.station.findMany({ where, select: { id: true } })).map((s) => s.id);
-  }
-
-  /** `ids` undefined = the whole network. Rides, payments and settlements belong to the station the ride started at. */
-  private async metrics(ids: Ids, window: DashboardWindow, now: Date): Promise<DashboardMetrics> {
-    const { from, to } = window;
-    const inWindow = { gte: from, lte: to };
-    const byStation = ids ? { stationId: { in: ids } } : {};
-    const bookingOf = ids ? { booking: { is: { stationId: { in: ids } } } } : {};
-
-    const [atStation, inRide, overdueRides, waiting, newBookings, ridesStarted, ridesCompleted, cancellations, noShows, collected, refunded, held, owed, pending, rideHours] =
-      await Promise.all([
-        this.prisma.vehicle.groupBy({
-          by: ['status'],
-          where: { retiredAt: null, ...(ids ? { stationId: { in: ids } } : { stationId: { not: null } }) },
-          _count: { _all: true },
-        }),
-        this.prisma.booking.count({ where: { ...byStation, status: 'IN_RIDE' } }),
-        this.prisma.booking.count({ where: { ...byStation, status: 'IN_RIDE', endAt: { lt: now } } }),
-        this.prisma.booking.count({ where: { ...byStation, status: 'CONFIRMED', endAt: { gt: now } } }),
-        this.prisma.booking.count({ where: { ...byStation, confirmedAt: inWindow } }),
-        this.prisma.rental.count({ where: { ...(ids ? { pickupStationId: { in: ids } } : {}), startedAt: inWindow } }),
-        this.prisma.rental.count({ where: { ...(ids ? { pickupStationId: { in: ids } } : {}), endedAt: inWindow } }),
-        this.prisma.booking.count({ where: { ...byStation, cancelledAt: inWindow } }),
-        this.prisma.booking.count({ where: { ...byStation, status: 'NO_SHOW', updatedAt: inWindow } }),
-        this.prisma.payment.aggregate({ _sum: { chargeAmount: true }, where: { status: 'SUCCEEDED', paidAt: inWindow, ...bookingOf } }),
-        this.prisma.refund.aggregate({
-          _sum: { refundAmount: true },
-          where: { status: 'SUCCEEDED', createdAt: inWindow, ...(ids ? { payment: { is: bookingOf } } : {}) },
-        }),
-        this.prisma.booking.aggregate({ _sum: { depositAmount: true }, where: { ...byStation, status: { in: ['CONFIRMED', 'IN_RIDE', 'RETURNED'] } } }),
-        this.prisma.settlement.aggregate({ _sum: { outstandingAmount: true }, _count: { _all: true }, where: { status: 'OUTSTANDING', ...bookingOf } }),
-        this.prisma.settlement.aggregate({ _sum: { refundAmount: true }, _count: { _all: true }, where: { status: 'REFUND_PENDING', ...bookingOf } }),
-        this.rideHours(ids, window),
-      ]);
-
-    const count = (s: string) => atStation.find((g) => g.status === s)?._count._all ?? 0;
-    const atStationTotal = atStation.reduce((n, g) => n + g._count._all, 0);
-    const fleetTotal = atStationTotal + inRide;
-    const collectedAmount = collected._sum.chargeAmount ?? 0;
-    const refundedAmount = refunded._sum.refundAmount ?? 0;
-
-    return {
-      window: { key: window.key, from, to, hours: window.hours },
-      fleet: { total: fleetTotal, available: count('AVAILABLE'), inRide, maintenance: count('MAINTENANCE'), offline: count('OFFLINE') },
-      utilizationPercent: utilizationPercent(rideHours, fleetTotal, window.hours),
-      activity: { newBookings, ridesStarted, ridesCompleted, cancellations, noShows },
-      money: { collected: collectedAmount, refunded: refundedAmount, net: collectedAmount - refundedAmount },
-      now: {
-        waitingPickups: waiting,
-        ridesOut: inRide,
-        overdueRides,
-        depositsHeld: held._sum.depositAmount ?? 0,
-        owed: { count: owed._count._all, amount: owed._sum.outstandingAmount ?? 0 },
-        refundsPending: { count: pending._count._all, amount: pending._sum.refundAmount ?? 0 },
-      },
-    };
-  }
-
-  /** Hours of rides that fall inside the window (a ride still out counts until now). Dates go in as UTC text for the timestamp columns. */
-  private async rideHours(ids: Ids, window: DashboardWindow): Promise<number> {
+  /**
+   * The raw counts and sums for every station in `ids` (undefined = every station), in a fixed handful of queries however many
+   * stations there are: each query groups by station, and cities and the network are added up from those rows. Rides, payments
+   * and settlements belong to the station where the ride started.
+   */
+  private async rawByStation(ids: Ids, window: DashboardWindow, now: Date): Promise<Map<string, RawNumbers>> {
     const from = window.from.toISOString();
     const to = window.to.toISOString();
-    const scope = ids ? Prisma.sql`AND r."pickupStationId" = ANY(${ids}::uuid[])` : Prisma.empty;
-    const rows = await this.prisma.$queryRaw<{ hours: number }[]>(Prisma.sql`
-      SELECT COALESCE(SUM(EXTRACT(EPOCH FROM (
-        LEAST(COALESCE(r."endedAt", ${to}::timestamp), ${to}::timestamp) - GREATEST(r."startedAt", ${from}::timestamp)
-      ))) / 3600.0, 0)::float8 AS hours
-      FROM "Rental" r
-      WHERE r."startedAt" < ${to}::timestamp AND COALESCE(r."endedAt", ${to}::timestamp) > ${from}::timestamp ${scope}`);
-    return rows[0]?.hours ?? 0;
+    const nowText = now.toISOString();
+    const out = new Map<string, RawNumbers>();
+    const of = (id: string) => {
+      let r = out.get(id);
+      if (!r) out.set(id, (r = emptyRaw()));
+      return r;
+    };
+    const stationScope = (column: Prisma.Sql) => (ids ? Prisma.sql`AND ${column} = ANY(${ids}::uuid[])` : Prisma.empty);
+
+    const [vehicles, bookings, rentals, payments, refunds, settlements] = await Promise.all([
+      this.prisma.vehicle.groupBy({
+        by: ['stationId', 'status'],
+        where: { retiredAt: null, ...(ids ? { stationId: { in: ids } } : { stationId: { not: null } }) },
+        _count: { _all: true },
+      }),
+      this.prisma.$queryRaw<{ sid: string; in_ride: bigint; overdue: bigint; waiting: bigint; new_bookings: bigint; cancellations: bigint; no_shows: bigint; held: bigint }[]>(Prisma.sql`
+        SELECT b."stationId" AS sid,
+          COUNT(*) FILTER (WHERE b.status = 'IN_RIDE') AS in_ride,
+          COUNT(*) FILTER (WHERE b.status = 'IN_RIDE' AND b."endAt" < ${nowText}::timestamp) AS overdue,
+          COUNT(*) FILTER (WHERE b.status = 'CONFIRMED' AND b."endAt" > ${nowText}::timestamp) AS waiting,
+          COUNT(*) FILTER (WHERE b."confirmedAt" >= ${from}::timestamp AND b."confirmedAt" <= ${to}::timestamp) AS new_bookings,
+          COUNT(*) FILTER (WHERE b."cancelledAt" >= ${from}::timestamp AND b."cancelledAt" <= ${to}::timestamp) AS cancellations,
+          COUNT(*) FILTER (WHERE b.status = 'NO_SHOW' AND b."updatedAt" >= ${from}::timestamp AND b."updatedAt" <= ${to}::timestamp) AS no_shows,
+          COALESCE(SUM(b."depositAmount") FILTER (WHERE b.status IN ('CONFIRMED', 'IN_RIDE', 'RETURNED')), 0) AS held
+        FROM "Booking" b
+        WHERE (b.status IN ('CONFIRMED', 'IN_RIDE', 'RETURNED') OR b."confirmedAt" >= ${from}::timestamp OR b."cancelledAt" >= ${from}::timestamp
+               OR (b.status = 'NO_SHOW' AND b."updatedAt" >= ${from}::timestamp)) ${stationScope(Prisma.sql`b."stationId"`)}
+        GROUP BY b."stationId"`),
+      this.prisma.$queryRaw<{ sid: string; started: bigint; completed: bigint; hours: number }[]>(Prisma.sql`
+        SELECT r."pickupStationId" AS sid,
+          COUNT(*) FILTER (WHERE r."startedAt" >= ${from}::timestamp AND r."startedAt" <= ${to}::timestamp) AS started,
+          COUNT(*) FILTER (WHERE r."endedAt" >= ${from}::timestamp AND r."endedAt" <= ${to}::timestamp) AS completed,
+          COALESCE(SUM(EXTRACT(EPOCH FROM (
+            LEAST(COALESCE(r."endedAt", ${to}::timestamp), ${to}::timestamp) - GREATEST(r."startedAt", ${from}::timestamp)
+          ))) FILTER (WHERE r."startedAt" < ${to}::timestamp AND COALESCE(r."endedAt", ${to}::timestamp) > ${from}::timestamp) / 3600.0, 0)::float8 AS hours
+        FROM "Rental" r
+        WHERE (r."endedAt" IS NULL OR r."endedAt" >= ${from}::timestamp) ${stationScope(Prisma.sql`r."pickupStationId"`)}
+        GROUP BY r."pickupStationId"`),
+      this.prisma.$queryRaw<{ sid: string; collected: bigint }[]>(Prisma.sql`
+        SELECT b."stationId" AS sid, SUM(p."chargeAmount") AS collected
+        FROM "Payment" p JOIN "Booking" b ON b.id = p."bookingId"
+        WHERE p.status = 'SUCCEEDED' AND p."paidAt" >= ${from}::timestamp AND p."paidAt" <= ${to}::timestamp ${stationScope(Prisma.sql`b."stationId"`)}
+        GROUP BY b."stationId"`),
+      this.prisma.$queryRaw<{ sid: string; refunded: bigint }[]>(Prisma.sql`
+        SELECT b."stationId" AS sid, SUM(r."refundAmount") AS refunded
+        FROM "Refund" r JOIN "Payment" p ON p.id = r."paymentId" JOIN "Booking" b ON b.id = p."bookingId"
+        WHERE r.status = 'SUCCEEDED' AND r."createdAt" >= ${from}::timestamp AND r."createdAt" <= ${to}::timestamp ${stationScope(Prisma.sql`b."stationId"`)}
+        GROUP BY b."stationId"`),
+      this.prisma.$queryRaw<{ sid: string; owed_count: bigint; owed_amount: bigint; pending_count: bigint; pending_amount: bigint }[]>(Prisma.sql`
+        SELECT b."stationId" AS sid,
+          COUNT(*) FILTER (WHERE s.status = 'OUTSTANDING') AS owed_count,
+          COALESCE(SUM(s."outstandingAmount") FILTER (WHERE s.status = 'OUTSTANDING'), 0) AS owed_amount,
+          COUNT(*) FILTER (WHERE s.status = 'REFUND_PENDING') AS pending_count,
+          COALESCE(SUM(s."refundAmount") FILTER (WHERE s.status = 'REFUND_PENDING'), 0) AS pending_amount
+        FROM "Settlement" s JOIN "Booking" b ON b.id = s."bookingId"
+        WHERE s.status IN ('OUTSTANDING', 'REFUND_PENDING') ${stationScope(Prisma.sql`b."stationId"`)}
+        GROUP BY b."stationId"`),
+    ]);
+
+    for (const v of vehicles) if (v.stationId) of(v.stationId).atStation[v.status] = (of(v.stationId).atStation[v.status] ?? 0) + v._count._all;
+    for (const b of bookings) {
+      const r = of(b.sid);
+      r.inRide = Number(b.in_ride);
+      r.overdue = Number(b.overdue);
+      r.waiting = Number(b.waiting);
+      r.newBookings = Number(b.new_bookings);
+      r.cancellations = Number(b.cancellations);
+      r.noShows = Number(b.no_shows);
+      r.held = Number(b.held);
+    }
+    for (const x of rentals) {
+      const r = of(x.sid);
+      r.ridesStarted = Number(x.started);
+      r.ridesCompleted = Number(x.completed);
+      r.rideHours = x.hours;
+    }
+    for (const x of payments) of(x.sid).collected = Number(x.collected);
+    for (const x of refunds) of(x.sid).refunded = Number(x.refunded);
+    for (const x of settlements) {
+      const r = of(x.sid);
+      r.owedCount = Number(x.owed_count);
+      r.owedAmount = Number(x.owed_amount);
+      r.pendingCount = Number(x.pending_count);
+      r.pendingAmount = Number(x.pending_amount);
+    }
+    return out;
   }
+}
+
+/** Everything the dashboards add up, for one station. All of it can be summed, so a city or the network is the sum of its stations. */
+export interface RawNumbers {
+  atStation: Partial<Record<string, number>>;
+  inRide: number;
+  overdue: number;
+  waiting: number;
+  newBookings: number;
+  ridesStarted: number;
+  ridesCompleted: number;
+  cancellations: number;
+  noShows: number;
+  collected: number;
+  refunded: number;
+  held: number;
+  owedCount: number;
+  owedAmount: number;
+  pendingCount: number;
+  pendingAmount: number;
+  rideHours: number;
+}
+
+export const emptyRaw = (): RawNumbers => ({
+  atStation: {},
+  inRide: 0,
+  overdue: 0,
+  waiting: 0,
+  newBookings: 0,
+  ridesStarted: 0,
+  ridesCompleted: 0,
+  cancellations: 0,
+  noShows: 0,
+  collected: 0,
+  refunded: 0,
+  held: 0,
+  owedCount: 0,
+  owedAmount: 0,
+  pendingCount: 0,
+  pendingAmount: 0,
+  rideHours: 0,
+});
+
+/** Adds up the stations of a slice (a station, a city, the network) and shapes the numbers the screens show. */
+export function toMetrics(parts: RawNumbers[], window: DashboardWindow): DashboardMetrics {
+  const sum = (pick: (r: RawNumbers) => number) => parts.reduce((n, r) => n + pick(r), 0);
+  const atStation = (status: string) => sum((r) => r.atStation[status] ?? 0);
+  const atStationTotal = sum((r) => Object.values(r.atStation).reduce<number>((n, c) => n + (c ?? 0), 0));
+  const inRide = sum((r) => r.inRide);
+  const fleetTotal = atStationTotal + inRide;
+  const collected = sum((r) => r.collected);
+  const refunded = sum((r) => r.refunded);
+  return {
+    window: { key: window.key, from: window.from, to: window.to, hours: window.hours },
+    fleet: { total: fleetTotal, available: atStation('AVAILABLE'), inRide, maintenance: atStation('MAINTENANCE'), offline: atStation('OFFLINE') },
+    utilizationPercent: utilizationPercent(sum((r) => r.rideHours), fleetTotal, window.hours),
+    activity: {
+      newBookings: sum((r) => r.newBookings),
+      ridesStarted: sum((r) => r.ridesStarted),
+      ridesCompleted: sum((r) => r.ridesCompleted),
+      cancellations: sum((r) => r.cancellations),
+      noShows: sum((r) => r.noShows),
+    },
+    money: { collected, refunded, net: collected - refunded },
+    now: {
+      waitingPickups: sum((r) => r.waiting),
+      ridesOut: inRide,
+      overdueRides: sum((r) => r.overdue),
+      depositsHeld: sum((r) => r.held),
+      owed: { count: sum((r) => r.owedCount), amount: sum((r) => r.owedAmount) },
+      refundsPending: { count: sum((r) => r.pendingCount), amount: sum((r) => r.pendingAmount) },
+    },
+  };
 }
 
 const pickNow = (m: DashboardMetrics): CityRow['now'] => ({

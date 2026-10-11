@@ -331,6 +331,19 @@ describe('Station desk: pickup, return and no-show (e2e)', () => {
       expect((await t.prisma.vehicle.findUniqueOrThrow({ where: { id: s.vehicleIds[2] } })).status).toBe('MAINTENANCE');
     });
 
+    it('a scooter that is out on a ride is "not available" (409), not "not found"', async () => {
+      const s = await setup();
+      const booking = await paidBooking(s.customer, s.vehicleIds[0]);
+      await pickup(s.empA.auth, booking.id, pickupBody(booking.pin)).expect(200);
+      const quote = await t.http().post(api('/bookings/quote')).send({ vehicleId: s.vehicleIds[0], hours: 1 }).expect(409);
+      expect(quote.body.code).toBe('VEHICLE_NOT_AVAILABLE');
+      const other = await t.verifiedCustomer();
+      const res = await t.http().post(api('/bookings')).set(other.auth).send({ vehicleId: s.vehicleIds[0], hours: 1 }).expect(409);
+      expect(res.body.code).toBe('VEHICLE_NOT_AVAILABLE');
+      // A scooter that really does not exist is still "not found".
+      await t.http().post(api('/bookings/quote')).send({ vehicleId: '00000000-0000-4000-8000-000000000000', hours: 1 }).expect(404);
+    });
+
     it('never lets two returns share the last free slot', async () => {
       const s = await setup({ vehicles: 2 });
       const [first, second] = [await ride(s, { vehicle: 0 }), await paidBooking(await t.verifiedCustomer(), s.vehicleIds[1])];

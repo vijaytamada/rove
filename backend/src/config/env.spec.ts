@@ -20,7 +20,9 @@ describe('validateEnv', () => {
   });
 
   it('reads the proxy and limit settings, and refuses a localhost CORS origin in production', () => {
-    expect(validateEnv(base)).toMatchObject({ TRUST_PROXY: 0, RATE_LIMIT_ENABLED: true });
+    expect(validateEnv(base)).toMatchObject({ TRUST_PROXY: 0, RATE_LIMIT_ENABLED: true, RATE_LIMIT_MULTIPLIER: 1 });
+    expect(validateEnv({ ...base, RATE_LIMIT_MULTIPLIER: '3' }).RATE_LIMIT_MULTIPLIER).toBe(3);
+    expect(() => validateEnv({ ...base, RATE_LIMIT_MULTIPLIER: '0' })).toThrow(/RATE_LIMIT_MULTIPLIER/);
     expect(validateEnv({ ...base, TRUST_PROXY: '1', RATE_LIMIT_ENABLED: 'false' })).toMatchObject({ TRUST_PROXY: 1, RATE_LIMIT_ENABLED: false });
     expect(() => validateEnv({ ...base, TRUST_PROXY: '9' })).toThrow(/TRUST_PROXY/);
     const real = { ...base, NODE_ENV: 'production', JWT_ACCESS_SECRET: 'a-real-long-random-secret' };

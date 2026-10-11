@@ -99,7 +99,7 @@ export class RentalsService {
     const orderBy: Prisma.BookingOrderByWithRelationInput =
       query.tab === 'past' ? { updatedAt: 'desc' } : query.tab === 'rides' ? { endAt: 'asc' } : { startAt: 'asc' };
     const [rows, total] = await this.prisma.$transaction([
-      this.prisma.booking.findMany({ where, include: STAFF_BOOKING_INCLUDE, orderBy, skip, take }),
+      this.prisma.booking.findMany({ where, relationLoadStrategy: 'join', include: STAFF_BOOKING_INCLUDE, orderBy, skip, take }),
       this.prisma.booking.count({ where }),
     ]);
     const items = await Promise.all(rows.map((r) => this.view(r, access, now, false)));
@@ -338,7 +338,7 @@ export class RentalsService {
   // ---- internals ----
 
   private async load(id: string): Promise<StaffBookingRow> {
-    const row = await this.prisma.booking.findUnique({ where: { id }, include: STAFF_BOOKING_INCLUDE });
+    const row = await this.prisma.booking.findUnique({ where: { id }, relationLoadStrategy: 'join', include: STAFF_BOOKING_INCLUDE });
     if (!row) throw new AppException(404, 'BOOKING_NOT_FOUND', 'Booking not found.');
     return row;
   }

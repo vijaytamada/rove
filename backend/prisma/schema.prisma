@@ -4,6 +4,8 @@ generator client {
   provider     = "prisma-client"
   output       = "../src/generated/prisma"
   moduleFormat = "esm"
+  // One query per read with its relations, instead of one per relation level (see docs/TESTING.md, load test).
+  previewFeatures = ["relationJoins"]
 }
 
 datasource db {
@@ -328,6 +330,9 @@ model Booking {
   @@index([userId, status])
   @@index([vehicleId, startAt])
   @@index([stationId, startAt])
+  // The dashboards count what happened in a time window.
+  @@index([confirmedAt])
+  @@index([cancelledAt])
 }
 
 model Payment {
@@ -349,6 +354,7 @@ model Payment {
   refunds Refund[]
 
   @@index([bookingId])
+  @@index([status, paidAt])
 }
 
 model Refund {
@@ -364,6 +370,7 @@ model Refund {
   payment Payment @relation(fields: [paymentId], references: [id], onDelete: Restrict)
 
   @@index([paymentId])
+  @@index([status, createdAt])
 }
 
 // One KYC record per customer. Holds the outcome only: never an identity number (see Security rules).
@@ -416,6 +423,8 @@ model Rental {
 
   @@index([vehicleId])
   @@index([pickupStationId])
+  @@index([startedAt])
+  @@index([endedAt])
 }
 
 // Damage noted at handover (already there) or at return (new). `feeAmount` is a flat amount entered by staff,

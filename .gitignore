@@ -40,3 +40,6 @@ backend/src/generated/
 
 # Real production secrets and settings (copy infra/production.env.example)
 infra/production.env
+
+# Load-test working files (server log, pid, fixtures, results)
+tools/load/.run/
