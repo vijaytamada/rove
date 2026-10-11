@@ -19,6 +19,9 @@ export function homeFor(role: Role): string {
  */
 export const ROUTE_RULES: { prefix: string; roles?: Role[] }[] = [
   { prefix: "/profile" },
+  { prefix: "/bookings", roles: ["CUSTOMER"] },
+  { prefix: "/notifications", roles: ["CUSTOMER"] },
+  { prefix: "/verify", roles: ["CUSTOMER"] },
   { prefix: "/staff", roles: ["STATION_EMPLOYEE", "CITY_MANAGER", "SUPER_ADMIN"] },
   { prefix: "/admin", roles: ["CITY_MANAGER", "SUPER_ADMIN"] },
 ];

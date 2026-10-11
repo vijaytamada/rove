@@ -16,7 +16,9 @@ export function StationCard({ station }: { station: StationView }) {
     >
       <div className="flex items-start justify-between gap-3">
         <h3 className="text-base font-semibold tracking-tight">{station.name}</h3>
-        {n > 0 ? (
+        {!station.openNow ? (
+          <StatusChip tone="muted">Closed now</StatusChip>
+        ) : n > 0 ? (
           <StatusChip tone="success">{n} available</StatusChip>
         ) : (
           <StatusChip tone="muted">None available</StatusChip>

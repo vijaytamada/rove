@@ -3,9 +3,9 @@
 Station-based e-scooter rental: browse → book → pay → pick up → ride → return → settle.
 Modular-monolith NestJS backend, Next.js web, Flutter mobile. Mock integrations first; real OTP/KYC/payments/IoT in later phases.
 
-**Status:** Phases 1-3 complete (auth and roles, cities, stations, fleet, admin console, customer app browsing), plus phone + OTP sign-in for customers. Next: Phase 4 — Booking. See `docs/PHASES.md`.
+**Status:** Phases 1-8 and 11 complete, and the decision-free halves of Phases 9 and 12 are built; all merged into `dev`. Built: auth and roles, cities, stations, fleet, admin console, booking with mock payment and identity check, My bookings and cancellation (website and app), the station desk, the final bill with the deposit refund or the amount owed, dashboards, notifications (bell and inbox on web and app, reminders, a minute background job), an audit trail and identity checks that can be pending, finish by signed webhook and be retried, live GPS telemetry with a simulator and a live map for staff, and production hardening (rate limits, CSP and security headers, structured logs, health probes, backups, Docker images, CI). **Waiting for the owner:** the SMS, identity and payment vendors and the Aadhaar legal review (Phases 9 and 10; the API will not start in production on mock providers), the deposit model, smart locks and QR hardware, the staff mobile app decision, and hosting. See `docs/PHASES.md`.
 
-**Branches:** `main` and `dev` are kept at the same commit; changes are made on `feature/*` branches cut from `dev` and merged once stable (see `docs/DEV_SETUP.md` §9).
+**Branches:** `main` is stable; `dev` collects finished features; changes are made on `feature/*` branches cut from `dev`. `dev` is merged into `main` once a batch of features is stable (see `docs/DEV_SETUP.md` §9).
 
 ## Layout
 | Path | What |

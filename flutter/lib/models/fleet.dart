@@ -1,3 +1,5 @@
+import 'pricing.dart';
+
 class CityView {
   const CityView({required this.id, required this.name, required this.state});
 
@@ -16,6 +18,7 @@ class StationView {
     required this.name,
     required this.address,
     required this.availableVehicles,
+    this.openNow = true,
     this.opensAt,
     this.closesAt,
   });
@@ -25,6 +28,9 @@ class StationView {
   final String name;
   final String address;
   final int availableVehicles;
+
+  /// Inside opening hours right now (city time). Booking a later time is still possible.
+  final bool openNow;
   final String? opensAt;
   final String? closesAt;
 
@@ -36,6 +42,7 @@ class StationView {
         name: json['name'] as String,
         address: json['address'] as String,
         availableVehicles: (json['availableVehicles'] as num?)?.toInt() ?? 0,
+        openNow: json['openNow'] as bool? ?? true,
         opensAt: json['opensAt'] as String?,
         closesAt: json['closesAt'] as String?,
       );
@@ -61,17 +68,32 @@ class VehicleModelView {
 
 /// What a customer sees for a scooter at a station.
 class VehiclePublicView {
-  const VehiclePublicView({required this.id, required this.code, required this.model, this.batteryPercent});
+  const VehiclePublicView({
+    required this.id,
+    required this.code,
+    required this.model,
+    this.batteryPercent,
+    this.available = true,
+    this.pricing,
+  });
 
   final String id;
   final String code;
   final int? batteryPercent;
   final VehicleModelView model;
 
+  /// False when the scooter is out of service or already in use (the booking screen can still show it).
+  final bool available;
+
+  /// The price here. Null means no pricing plan covers it yet, so it cannot be booked.
+  final PricingView? pricing;
+
   factory VehiclePublicView.fromJson(Map<String, dynamic> json) => VehiclePublicView(
         id: json['id'] as String,
         code: json['code'] as String,
         batteryPercent: (json['batteryPercent'] as num?)?.toInt(),
         model: VehicleModelView.fromJson(json['model'] as Map<String, dynamic>),
+        available: (json['status'] as String?) == null || json['status'] == 'AVAILABLE',
+        pricing: json['pricing'] == null ? null : PricingView.fromJson(json['pricing'] as Map<String, dynamic>),
       );
 }

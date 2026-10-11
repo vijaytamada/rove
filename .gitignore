@@ -37,3 +37,12 @@ backend/src/generated/
 
 # TypeScript incremental build info
 *.tsbuildinfo
+
+# Real production secrets and settings (copy infra/production.env.example)
+infra/production.env
+
+# Load-test working files (server log, pid, fixtures, results)
+tools/load/.run/
+
+# Android bug reports
+flutter/bugreport-*.zip

@@ -6,7 +6,9 @@ import '../auth/auth_controller.dart';
 import '../models/fleet.dart';
 import '../theme/tokens.dart';
 import '../widgets/fleet_cards.dart';
+import '../widgets/form_banner.dart';
 import '../widgets/load_states.dart';
+import 'book_screen.dart';
 
 class StationDetailScreen extends StatefulWidget {
   const StationDetailScreen({super.key, required this.station});
@@ -46,6 +48,11 @@ class _StationDetailScreenState extends State<StationDetailScreen> {
     });
   }
 
+  Future<void> _book(VehiclePublicView vehicle) async {
+    await Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => BookScreen(vehicleId: vehicle.id)));
+    if (mounted) _load();
+  }
+
   @override
   Widget build(BuildContext context) {
     final s = widget.station;
@@ -64,19 +71,26 @@ class _StationDetailScreenState extends State<StationDetailScreen> {
                       _Info(Icons.place_outlined, s.address),
                       const SizedBox(height: 6),
                       _Info(Icons.schedule, s.hoursLabel),
+                      if (!s.openNow) ...[
+                        const SizedBox(height: 16),
+                        const FormBanner.notice(
+                            "This station is closed right now. You can still book a scooter for a time when it's open."),
+                      ],
                       const SizedBox(height: 24),
-                      Text('Available scooters (${_vehicles!.length})',
+                      Text('Available now (${_vehicles!.length})',
                           style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
                       const SizedBox(height: 12),
                       if (_vehicles!.isEmpty)
                         const Padding(
                           padding: EdgeInsets.symmetric(vertical: 24),
-                          child: Text('No scooters are available here right now. Try another station.',
+                          child: Text('No scooters are free here right now. Try another station.',
                               style: TextStyle(color: Tokens.inkMuted, fontSize: 16)),
                         )
                       else
-                        for (final v in _vehicles!) ...[ScooterCard(vehicle: v), const SizedBox(height: 12)],
-                      const Text('Booking arrives in a later phase.', style: TextStyle(color: Tokens.inkMuted)),
+                        for (final v in _vehicles!) ...[
+                          ScooterCard(vehicle: v, onSelect: () => _book(v)),
+                          const SizedBox(height: 12),
+                        ],
                     ],
                   ),
                 ),

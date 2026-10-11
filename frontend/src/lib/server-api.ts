@@ -36,3 +36,15 @@ export async function getStaff(role: string): Promise<import("./types").UserView
   );
   return groups.flat();
 }
+
+/** Like apiGet, but a missing or foreign record (404) comes back as null so the page can show "not found". */
+export async function apiGetMaybe<T>(path: string): Promise<T | null> {
+  const token = await getAccessToken();
+  if (!token) redirect("/login");
+  const res = await apiRequest<T>(path, { token });
+  if (res.ok) return res.data;
+  if (res.status === 404) return null;
+  if (res.status === 401) redirect("/login");
+  if (res.status === 403) redirect("/");
+  throw new Error(res.message);
+}

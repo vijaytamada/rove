@@ -25,7 +25,7 @@ npm run start:dev          # http://localhost:3001
 | `npm run prisma:deploy` | apply existing migrations |
 
 ## Layout
-`src/config` env validation (zod) · `src/infra` Prisma + Redis services · `src/modules/<name>` feature modules · `src/providers` mock/real providers · `src/pricing` pure pricing engine (Phase 4/6) · `prisma/` schema + migrations · `test/` e2e.
+`src/config` env validation (zod) · `src/infra` Prisma + Redis services · `src/modules/<name>` feature modules · `src/providers` mock/real providers · `src/modules/pricing` plans + the pure quote function (`rental-quote.ts`; the settlement engine joins it in Phase 6) · `prisma/` schema + migrations · `test/` e2e.
 
 ## Notes
 - ESM project: relative imports use the `.js` suffix (`import { X } from './x.js'`).

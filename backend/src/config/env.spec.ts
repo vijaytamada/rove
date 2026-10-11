@@ -13,6 +13,32 @@ describe('validateEnv', () => {
     expect(env.NODE_ENV).toBe('development');
     expect(env.JWT_ACCESS_TTL).toBe('15m');
     expect(env.OTP_PROVIDER).toBe('mock');
+    expect(env.NOTIFICATION_PROVIDER).toBe('mock');
+    expect(env.JOBS_ENABLED).toBe(true);
+    expect(env.TELEMETRY_PROVIDER).toBe('mock');
+    expect(env.TELEMETRY_RETENTION_DAYS).toBe(7);
+  });
+
+  it('reads the proxy and limit settings, and refuses a localhost CORS origin in production', () => {
+    expect(validateEnv(base)).toMatchObject({ TRUST_PROXY: 0, RATE_LIMIT_ENABLED: true, RATE_LIMIT_MULTIPLIER: 1 });
+    expect(validateEnv({ ...base, RATE_LIMIT_MULTIPLIER: '3' }).RATE_LIMIT_MULTIPLIER).toBe(3);
+    expect(() => validateEnv({ ...base, RATE_LIMIT_MULTIPLIER: '0' })).toThrow(/RATE_LIMIT_MULTIPLIER/);
+    expect(validateEnv({ ...base, TRUST_PROXY: '1', RATE_LIMIT_ENABLED: 'false' })).toMatchObject({ TRUST_PROXY: 1, RATE_LIMIT_ENABLED: false });
+    expect(() => validateEnv({ ...base, TRUST_PROXY: '9' })).toThrow(/TRUST_PROXY/);
+    const real = { ...base, NODE_ENV: 'production', JWT_ACCESS_SECRET: 'a-real-long-random-secret' };
+    expect(() => validateEnv(real)).toThrow(/CORS_ORIGIN/);
+    expect(() => validateEnv({ ...real, CORS_ORIGIN: 'https://rove.example' })).not.toThrow(/CORS_ORIGIN/);
+  });
+
+  it('refuses the telemetry simulator and the dev device key in production', () => {
+    const real = { ...base, NODE_ENV: 'production', JWT_ACCESS_SECRET: 'a-real-long-random-secret', KYC_WEBHOOK_SECRET: 'a-real-webhook-secret-123' };
+    expect(() => validateEnv({ ...real, TELEMETRY_PROVIDER: 'simulator' })).toThrow(/simulator/);
+    expect(() => validateEnv(real)).toThrow(/dev-only key/);
+  });
+
+  it('reads JOBS_ENABLED as a boolean', () => {
+    expect(validateEnv({ ...base, JOBS_ENABLED: 'false' }).JOBS_ENABLED).toBe(false);
+    expect(() => validateEnv({ ...base, JOBS_ENABLED: 'maybe' })).toThrow(/JOBS_ENABLED/);
   });
 
   it('coerces PORT to a number', () => {
@@ -32,5 +58,8 @@ describe('validateEnv', () => {
     expect(() =>
       validateEnv({ ...base, NODE_ENV: 'production', JWT_ACCESS_SECRET: 'a-real-long-random-secret' }),
     ).toThrow(/mock OTP/);
+    const real = { ...base, NODE_ENV: 'production', JWT_ACCESS_SECRET: 'a-real-long-random-secret' };
+    expect(() => validateEnv(real)).toThrow(/mock PAYMENT/);
+    expect(() => validateEnv(real)).toThrow(/mock KYC/);
   });
 });

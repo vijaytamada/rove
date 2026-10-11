@@ -51,6 +51,19 @@ export interface TestApp {
     opts?: { status?: 'ACTIVE' | 'INACTIVE'; capacity?: number },
   ) => Promise<{ id: string; name: string; cityId: string }>;
   makeModel: () => Promise<{ id: string }>;
+  /** A pricing plan for a model (default plan unless a city is given). Rs 50/hour, Rs 300/day, Rs 1000 deposit. */
+  makePlan: (modelId: string, opts?: { cityId?: string; hourly?: number; daily?: number | null; deposit?: number }) => Promise<{ id: string }>;
+  /** Marks a customer's identity check as passed so they can book. */
+  verifyKyc: (userId: string) => Promise<void>;
+  /** A signed-in customer with a verified identity. */
+  verifiedCustomer: () => Promise<TestUser & { auth: Auth }>;
+  /** A ready-to-book setup: open city and station, a model with a plan and `vehicles` scooters. */
+  makeBookable: (opts?: { vehicles?: number; hours?: { opensAt: string; closesAt: string } }) => Promise<{
+    cityId: string;
+    stationId: string;
+    modelId: string;
+    vehicleIds: string[];
+  }>;
   makeVehicle: (
     stationId: string,
     modelId: string,
@@ -61,14 +74,28 @@ export interface TestApp {
 
 export async function createTestApp(): Promise<TestApp> {
   const moduleRef = await Test.createTestingModule({ imports: [AppModule] }).compile();
-  const app = moduleRef.createNestApplication();
+  const app = moduleRef.createNestApplication({ rawBody: true });
   configureApp(app);
   await app.init();
 
   const prisma = app.get(PrismaService);
   const redis = app.get(RedisService);
   const passwords = app.get(PasswordService);
-  const http = () => request(app.getHttpServer());
+  // Each request comes from its own made-up address (2001:db8::/32 is reserved for documentation), as a real crowd would,
+  // so the per-IP limits do not add up across unrelated tests. A test can still set X-Forwarded-For itself to override it.
+  const randomClientIp = () => `2001:db8:${Math.floor(Math.random() * 0xffff).toString(16)}:${Math.floor(Math.random() * 0xffff).toString(16)}::1`;
+  const http = () => {
+    const agent = request(app.getHttpServer());
+    const methods = ['get', 'post', 'put', 'patch', 'delete'] as const;
+    return new Proxy(agent, {
+      get(target, prop) {
+        if ((methods as readonly (string | symbol)[]).includes(prop)) {
+          return (...args: unknown[]) => (target[prop as (typeof methods)[number]] as (...a: unknown[]) => request.Test)(...args).set('X-Forwarded-For', randomClientIp());
+        }
+        return Reflect.get(target, prop);
+      },
+    });
+  };
   const short = () => randomUUID().slice(0, 8);
   const phone = () => `${PHONE_PREFIX}${String(Math.floor(Math.random() * 1e7)).padStart(7, '0')}`;
 
@@ -107,7 +134,7 @@ export async function createTestApp(): Promise<TestApp> {
     return { id: user.id, role, email, phone: userPhone };
   };
 
-  return {
+  const self: TestApp = {
     app,
     prisma,
     redis,
@@ -146,6 +173,41 @@ export async function createTestApp(): Promise<TestApp> {
       });
       return { id: model.id };
     },
+    async makePlan(modelId, opts) {
+      const plan = await prisma.pricingPlan.create({
+        data: {
+          modelId,
+          cityId: opts?.cityId ?? null,
+          hourlyRateAmount: opts?.hourly ?? 5000,
+          dailyRateAmount: opts?.daily === undefined ? 30000 : opts.daily,
+          includedKmPerHour: 12,
+          extraKmRateAmount: 600,
+          lateFeePerHourAmount: 9900,
+          depositAmount: opts?.deposit ?? 100000,
+        },
+      });
+      return { id: plan.id };
+    },
+    async verifyKyc(userId) {
+      await prisma.kycRecord.create({
+        data: { userId, provider: 'mock', status: 'VERIFIED', consentAt: new Date(), verifiedAt: new Date() },
+      });
+    },
+    async verifiedCustomer() {
+      const customer = await self.asRole('CUSTOMER');
+      await self.verifyKyc(customer.id);
+      return customer;
+    },
+    async makeBookable(opts) {
+      const city = await self.makeCity();
+      const station = await self.makeStation(city.id);
+      if (opts?.hours) await prisma.station.update({ where: { id: station.id }, data: opts.hours });
+      const model = await self.makeModel();
+      await self.makePlan(model.id);
+      const vehicleIds: string[] = [];
+      for (let i = 0; i < (opts?.vehicles ?? 1); i++) vehicleIds.push((await self.makeVehicle(station.id, model.id)).id);
+      return { cityId: city.id, stationId: station.id, modelId: model.id, vehicleIds };
+    },
     async makeVehicle(stationId, modelId, opts) {
       const code = `E2E-${short().toUpperCase()}`;
       const vehicle = await prisma.vehicle.create({
@@ -161,10 +223,29 @@ export async function createTestApp(): Promise<TestApp> {
       const keys = [
         ...(await redis.client.keys(`otp:*${PHONE_PREFIX}*`)),
         ...(await redis.client.keys(`login:fail:${PREFIX}*`)),
+        // Fake client addresses the hardening tests use (203.0.113.0/24 is reserved for documentation).
+        ...(await redis.client.keys('rl:*:203.0.113.*')),
+        ...(await redis.client.keys('login:ip:203.0.113.*')),
+        ...(await redis.client.keys('rl:*:2001:db8:*')),
+        ...(await redis.client.keys('login:ip:2001:db8:*')),
         ...users.flatMap((u) => [`otp:verify:${u.id}`, `otp:cooldown:verify:${u.id}`]),
       ];
       if (keys.length) await redis.client.del(...keys);
-      // Order matters: assignments (via users) and vehicles reference stations; stations reference cities.
+      // Order matters: refunds -> payments -> bookings -> users; plans and vehicles reference models and cities.
+      const ofTestUsers = { user: { id: { in: users.map((u) => u.id) } } };
+      const testVehicles = await prisma.vehicle.findMany({ where: { code: { startsWith: 'E2E-' } }, select: { id: true } });
+      if (testVehicles.length) await redis.client.del(...testVehicles.map((v) => `telemetry:latest:${v.id}`));
+      await prisma.auditLog.deleteMany({
+        where: { OR: [{ actorId: { in: users.map((u) => u.id) } }, { entityId: { in: users.map((u) => u.id) } }] },
+      });
+      await prisma.settlement.deleteMany({ where: { booking: ofTestUsers } });
+      await prisma.rental.deleteMany({ where: { booking: ofTestUsers } });
+      await prisma.refund.deleteMany({ where: { payment: { booking: ofTestUsers } } });
+      await prisma.payment.deleteMany({ where: { booking: ofTestUsers } });
+      await prisma.booking.deleteMany({ where: ofTestUsers });
+      await prisma.pricingPlan.deleteMany({
+        where: { OR: [{ model: { brand: { startsWith: PREFIX } } }, { city: { name: { startsWith: PREFIX } } }] },
+      });
       await prisma.user.deleteMany({ where: { id: { in: users.map((u) => u.id) } } });
       await prisma.vehicle.deleteMany({ where: { code: { startsWith: 'E2E-' } } });
       await prisma.station.deleteMany({ where: { name: { startsWith: PREFIX } } });
@@ -173,4 +254,5 @@ export async function createTestApp(): Promise<TestApp> {
       await app.close();
     },
   };
+  return self;
 }

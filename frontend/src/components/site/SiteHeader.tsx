@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Bell } from "lucide-react";
 import { logout } from "@/app/actions/auth";
 import { Wordmark } from "@/components/app/Wordmark";
 import { homeFor } from "@/lib/access";
@@ -14,7 +15,7 @@ function initials(name: string) {
     .join("");
 }
 
-export function SiteHeader({ user }: { user: UserView | null }) {
+export function SiteHeader({ user, unread = 0 }: { user: UserView | null; unread?: number }) {
   const consoleHref = user && user.role !== "CUSTOMER" ? homeFor(user.role) : null;
 
   return (
@@ -29,15 +30,33 @@ export function SiteHeader({ user }: { user: UserView | null }) {
               Home
             </NavLink>
             <NavLink href="/stations">Stations</NavLink>
+            {user?.role === "CUSTOMER" && <NavLink href="/bookings">Bookings</NavLink>}
             {user && <NavLink href="/profile">Profile</NavLink>}
             {consoleHref && (
-              <NavLink href={consoleHref}>{user?.role === "STATION_EMPLOYEE" ? "Station console" : "Admin"}</NavLink>
+              <NavLink href={consoleHref}>{user?.role === "STATION_EMPLOYEE" ? "Station desk" : "Admin"}</NavLink>
             )}
           </nav>
         </div>
 
         {user ? (
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-1 md:gap-3">
+            {user.role === "CUSTOMER" && (
+              <Link
+                href="/notifications"
+                aria-label={unread > 0 ? `Notifications, ${unread} unread` : "Notifications"}
+                className="relative flex size-10 items-center justify-center rounded-full text-ink-muted transition-colors hover:bg-canvas hover:text-ink"
+              >
+                <Bell size={20} strokeWidth={1.75} aria-hidden="true" />
+                {unread > 0 && (
+                  <span
+                    aria-hidden="true"
+                    className="absolute right-1 top-1 flex min-w-4 items-center justify-center rounded-full bg-accent px-1 text-[10px] font-semibold leading-4 text-white"
+                  >
+                    {unread > 9 ? "9+" : unread}
+                  </span>
+                )}
+              </Link>
+            )}
             <Link
               href="/profile"
               className="flex items-center gap-2.5 rounded-full py-1 pl-1 pr-1 hover:bg-canvas md:pr-3"

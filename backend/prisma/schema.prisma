@@ -4,6 +4,8 @@ generator client {
   provider     = "prisma-client"
   output       = "../src/generated/prisma"
   moduleFormat = "esm"
+  // One query per read with its relations, instead of one per relation level (see docs/TESTING.md, load test).
+  previewFeatures = ["relationJoins"]
 }
 
 datasource db {
@@ -40,6 +42,86 @@ enum UserStatus {
   DISABLED
 }
 
+enum BookingStatus {
+  PENDING_PAYMENT // vehicle held for 10 minutes while the customer pays
+  CONFIRMED
+  IN_RIDE // Phase 5
+  RETURNED // Phase 5
+  SETTLED // the refund went through, or there was nothing to refund
+  CANCELLED
+  EXPIRED // payment hold ran out
+  NO_SHOW // Phase 5
+}
+
+enum PaymentPurpose {
+  RENTAL_AND_DEPOSIT
+  OUTSTANDING // what a customer owes after a ride (settlement)
+}
+
+enum PaymentStatus {
+  PENDING
+  SUCCEEDED
+  FAILED
+}
+
+enum RefundStatus {
+  SUCCEEDED
+  FAILED
+}
+
+enum RefundReason {
+  CANCELLATION
+  NO_SHOW // the deposit comes back, the rental is kept
+  DEPOSIT_RETURN // what is left of the deposit after a ride's charges
+}
+
+enum SettlementStatus {
+  REFUND_PENDING // the deposit refund has not gone through yet (staff can retry it)
+  REFUNDED // what was left of the deposit went back to the customer
+  OUTSTANDING // charges were more than the deposit; the customer owes the difference
+  CLEARED // the outstanding amount was paid
+  NO_ACTION // charges used the whole deposit, or there was nothing to move
+}
+
+enum SettlementLineType {
+  EXTRA_KM
+  LATE_FEE
+  DAMAGE
+}
+
+enum DamagePhase {
+  PICKUP // already there when the customer took the scooter
+  RETURN
+}
+
+enum DamageSeverity {
+  MINOR
+  MODERATE
+  MAJOR
+}
+
+enum NotificationType {
+  BOOKING_CONFIRMED
+  BOOKING_CANCELLED
+  BOOKING_EXPIRED // the 10-minute payment hold ran out
+  PICKUP_REMINDER
+  RIDE_STARTED
+  RETURN_REMINDER
+  RETURN_OVERDUE
+  RIDE_COMPLETED // the final bill: refund on its way, amount owed or nothing to move
+  REFUND_SENT // a deposit refund that failed at first went through
+  PAYMENT_RECEIVED // an amount owed was paid
+  NO_SHOW
+  KYC_VERIFIED // the identity check finished later (the provider's answer came after the customer left the screen)
+  KYC_REJECTED
+}
+
+enum KycStatus {
+  PENDING
+  VERIFIED
+  REJECTED
+}
+
 model User {
   id              String     @id @default(uuid()) @db.Uuid
   // Customers sign in with their phone (OTP): no password, email optional. Staff have both (CHECK in migration).
@@ -55,6 +137,14 @@ model User {
 
   refreshTokens RefreshToken[]
   assignments   StaffAssignment[]
+  bookings      Booking[]
+  kyc           KycRecord?
+  notifications Notification[]
+  auditEntries  AuditLog[]
+
+  pickupsHandled Rental[]       @relation("RentalPickupEmployee")
+  returnsHandled Rental[]       @relation("RentalReturnEmployee")
+  damagesLogged  DamageRecord[]
 
   @@index([role])
 }
@@ -102,8 +192,9 @@ model City {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  stations    Station[]
-  assignments StaffAssignment[]
+  stations     Station[]
+  assignments  StaffAssignment[]
+  pricingPlans PricingPlan[]
 
   @@unique([name, state])
 }
@@ -126,6 +217,9 @@ model Station {
   city        City              @relation(fields: [cityId], references: [id], onDelete: Restrict)
   vehicles    Vehicle[]
   assignments StaffAssignment[]
+  bookings    Booking[]
+  pickups     Rental[]          @relation("RentalPickupStation")
+  returns     Rental[]          @relation("RentalReturnStation")
 
   @@unique([cityId, name])
   @@index([cityId])
@@ -143,7 +237,8 @@ model VehicleModel {
   createdAt         DateTime    @default(now())
   updatedAt         DateTime    @updatedAt
 
-  vehicles Vehicle[]
+  vehicles     Vehicle[]
+  pricingPlans PricingPlan[]
 
   @@unique([brand, name])
 }
@@ -164,9 +259,293 @@ model Vehicle {
   createdAt          DateTime      @default(now())
   updatedAt          DateTime      @updatedAt
 
-  model   VehicleModel @relation(fields: [modelId], references: [id], onDelete: Restrict)
-  station Station?     @relation(fields: [stationId], references: [id], onDelete: Restrict)
+  model     VehicleModel     @relation(fields: [modelId], references: [id], onDelete: Restrict)
+  station   Station?         @relation(fields: [stationId], references: [id], onDelete: Restrict)
+  bookings  Booking[]
+  rentals   Rental[]
+  telemetry TelemetryPoint[]
 
   @@index([stationId, status])
   @@index([modelId])
+}
+
+// Money is integer paise. A plan belongs to a model; cityId null = the default for every city, a city plan overrides it.
+// At most one default plan per model (partial unique index in the migration).
+model PricingPlan {
+  id                   String   @id @default(uuid()) @db.Uuid
+  modelId              String   @db.Uuid
+  cityId               String?  @db.Uuid
+  hourlyRateAmount     Int
+  // When set, the rental for any duration is capped at this price (so 24 hours costs the day rate).
+  dailyRateAmount      Int?
+  includedKmPerHour    Int
+  extraKmRateAmount    Int
+  graceMinutes         Int      @default(15)
+  lateFeePerHourAmount Int
+  depositAmount        Int
+  isActive             Boolean  @default(true)
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  model VehicleModel @relation(fields: [modelId], references: [id], onDelete: Restrict)
+  city  City?        @relation(fields: [cityId], references: [id], onDelete: Restrict)
+
+  @@unique([modelId, cityId])
+  @@index([cityId])
+}
+
+// A customer's reservation of one specific vehicle for a time window. Overlaps on a vehicle are impossible (exclusion
+// constraint in the migration). The PIN is not stored: it is derived from the booking (see booking-codes.ts).
+model Booking {
+  id              String        @id @default(uuid()) @db.Uuid
+  code            String        @unique
+  userId          String        @db.Uuid
+  vehicleId       String        @db.Uuid
+  // Pickup station, copied from the vehicle at booking time.
+  stationId       String        @db.Uuid
+  status          BookingStatus @default(PENDING_PAYMENT)
+  startAt         DateTime
+  endAt           DateTime
+  hours           Int
+  holdExpiresAt   DateTime?
+  rentalAmount    Int
+  depositAmount   Int
+  totalAmount     Int
+  // The plan values the customer agreed to (rates, included km, late fee, grace, deposit). Later plan edits never change it.
+  pricingSnapshot Json
+  confirmedAt     DateTime?
+  cancelledAt     DateTime?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  user          User           @relation(fields: [userId], references: [id], onDelete: Restrict)
+  vehicle       Vehicle        @relation(fields: [vehicleId], references: [id], onDelete: Restrict)
+  station       Station        @relation(fields: [stationId], references: [id], onDelete: Restrict)
+  payments      Payment[]
+  rental        Rental?
+  settlement    Settlement?
+  notifications Notification[]
+
+  @@index([userId, createdAt])
+  @@index([userId, status])
+  @@index([vehicleId, startAt])
+  @@index([stationId, startAt])
+  // The dashboards count what happened in a time window.
+  @@index([confirmedAt])
+  @@index([cancelledAt])
+}
+
+model Payment {
+  id             String         @id @default(uuid()) @db.Uuid
+  bookingId      String         @db.Uuid
+  purpose        PaymentPurpose
+  chargeAmount   Int
+  status         PaymentStatus  @default(PENDING)
+  provider       String
+  providerRef    String?
+  // Replaying the same key returns the same payment instead of charging twice.
+  idempotencyKey String?        @unique
+  failureReason  String?
+  paidAt         DateTime?
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+
+  booking Booking  @relation(fields: [bookingId], references: [id], onDelete: Restrict)
+  refunds Refund[]
+
+  @@index([bookingId])
+  @@index([status, paidAt])
+}
+
+model Refund {
+  id           String       @id @default(uuid()) @db.Uuid
+  paymentId    String       @db.Uuid
+  refundAmount Int
+  status       RefundStatus
+  reason       RefundReason
+  provider     String
+  providerRef  String?
+  createdAt    DateTime     @default(now())
+
+  payment Payment @relation(fields: [paymentId], references: [id], onDelete: Restrict)
+
+  @@index([paymentId])
+  @@index([status, createdAt])
+}
+
+// One KYC record per customer. Holds the outcome only: never an identity number (see Security rules).
+model KycRecord {
+  id              String    @id @default(uuid()) @db.Uuid
+  userId          String    @unique @db.Uuid
+  provider        String
+  providerRef     String?
+  status          KycStatus
+  consentAt       DateTime
+  verifiedAt      DateTime?
+  rejectionReason String?
+  // How many times the customer started the check (a rejected check can be retried a few times).
+  attempts        Int       @default(1)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+// The physical ride of a booking: created when staff hand the scooter over, completed when it is brought back.
+// Readings are taken by staff. The late fee, extra km and damage charges are billed on the Settlement.
+model Rental {
+  id                  String    @id @default(uuid()) @db.Uuid
+  bookingId           String    @unique @db.Uuid
+  vehicleId           String    @db.Uuid
+  pickupStationId     String    @db.Uuid
+  returnStationId     String?   @db.Uuid
+  pickupEmployeeId    String    @db.Uuid
+  returnEmployeeId    String?   @db.Uuid
+  startedAt           DateTime
+  endedAt             DateTime?
+  startOdometerKm     Float
+  endOdometerKm       Float?
+  startBatteryPercent Int
+  endBatteryPercent   Int?
+  // Set when staff handed over a different scooter than the one booked (same model); the booking points to the new one.
+  originalVehicleId   String?   @db.Uuid
+  swapReason          String?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  booking        Booking        @relation(fields: [bookingId], references: [id], onDelete: Restrict)
+  vehicle        Vehicle        @relation(fields: [vehicleId], references: [id], onDelete: Restrict)
+  pickupStation  Station        @relation("RentalPickupStation", fields: [pickupStationId], references: [id], onDelete: Restrict)
+  returnStation  Station?       @relation("RentalReturnStation", fields: [returnStationId], references: [id], onDelete: Restrict)
+  pickupEmployee User           @relation("RentalPickupEmployee", fields: [pickupEmployeeId], references: [id], onDelete: Restrict)
+  returnEmployee User?          @relation("RentalReturnEmployee", fields: [returnEmployeeId], references: [id], onDelete: Restrict)
+  damages        DamageRecord[]
+
+  @@index([vehicleId])
+  @@index([pickupStationId])
+  @@index([startedAt])
+  @@index([endedAt])
+}
+
+// Damage noted at handover (already there) or at return (new). `feeAmount` is a flat amount entered by staff,
+// charged against the deposit on the Settlement.
+model DamageRecord {
+  id           String         @id @default(uuid()) @db.Uuid
+  rentalId     String         @db.Uuid
+  phase        DamagePhase
+  description  String
+  severity     DamageSeverity
+  feeAmount    Int            @default(0)
+  recordedById String         @db.Uuid
+  createdAt    DateTime       @default(now())
+
+  rental     Rental @relation(fields: [rentalId], references: [id], onDelete: Cascade)
+  recordedBy User   @relation(fields: [recordedById], references: [id], onDelete: Restrict)
+
+  @@index([rentalId])
+}
+
+// The final bill of a ride: charges taken from the deposit, then a refund or an amount the customer owes.
+// Created in the same step that takes the scooter back. All amounts are integer paise.
+model Settlement {
+  id                String           @id @default(uuid()) @db.Uuid
+  bookingId         String           @unique @db.Uuid
+  depositHeld       Int
+  totalCharges      Int
+  refundAmount      Int
+  outstandingAmount Int
+  status            SettlementStatus
+  // When the refund went through, or when nothing needed moving.
+  settledAt         DateTime?
+  // When an outstanding amount was paid.
+  clearedAt         DateTime?
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+
+  booking   Booking              @relation(fields: [bookingId], references: [id], onDelete: Restrict)
+  lineItems SettlementLineItem[]
+
+  @@index([status])
+}
+
+model SettlementLineItem {
+  id           String             @id @default(uuid()) @db.Uuid
+  settlementId String             @db.Uuid
+  type         SettlementLineType
+  description  String
+  // Started kilometres or started hours; 1 for damage.
+  quantity     Int
+  unitAmount   Int
+  amount       Int
+
+  settlement Settlement @relation(fields: [settlementId], references: [id], onDelete: Cascade)
+
+  @@index([settlementId])
+}
+
+// A message to a customer, kept so it can be shown in the app and on the website. Delivery outside the app (SMS, push,
+// email) goes through the NotificationProvider and is not tracked here. `dedupeKey` makes every event send once, even if
+// the code that raises it runs twice (reminders, retries).
+model Notification {
+  id        String           @id @default(uuid()) @db.Uuid
+  userId    String           @db.Uuid
+  type      NotificationType
+  title     String
+  body      String
+  bookingId String?          @db.Uuid
+  dedupeKey String           @unique
+  readAt    DateTime?
+  createdAt DateTime         @default(now())
+
+  user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  booking Booking? @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@index([userId, readAt])
+  @@index([bookingId])
+}
+
+// Who did what. Written for staff changes (every successful write by a staff or admin account) and for the identity check.
+// Never holds a request body, a password or an identity number: only the route, ids and a few safe values.
+model AuditLog {
+  id         String   @id @default(uuid()) @db.Uuid
+  // Null when the system acted (a provider's webhook). Kept (set to null) if the account is ever removed.
+  actorId    String?  @db.Uuid
+  actorRole  Role?
+  // A stable code such as BOOKING_PICKUP, SETTLEMENT_COLLECT or KYC_VERIFIED; unknown routes fall back to "METHOD /route".
+  action     String
+  entityType String?
+  entityId   String?
+  // The API route when the entry came from a request, e.g. "POST /station/bookings/:id/pickup".
+  route      String?
+  details    Json?
+  createdAt  DateTime @default(now())
+
+  actor User? @relation(fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([createdAt])
+  @@index([actorId, createdAt])
+  @@index([entityType, entityId])
+}
+
+// One reading from a scooter's tracker (or the simulator): where it is and how it is doing. The newest reading per scooter
+// is also kept in Redis for the live map; this table is the history, pruned after TELEMETRY_RETENTION_DAYS.
+model TelemetryPoint {
+  id             BigInt   @id @default(autoincrement())
+  vehicleId      String   @db.Uuid
+  // When the tracker took the reading (its clock), versus when we stored it.
+  recordedAt     DateTime
+  receivedAt     DateTime @default(now())
+  latitude       Float
+  longitude      Float
+  speedKmh       Float
+  batteryPercent Int
+  odometerKm     Float
+  ignition       Boolean
+
+  vehicle Vehicle @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+
+  // A tracker that sends the same reading twice (a retry) stores it once.
+  @@unique([vehicleId, recordedAt])
+  @@index([recordedAt])
 }

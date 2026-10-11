@@ -165,7 +165,9 @@ describe('Auth (e2e)', () => {
       const wrong = await t.http().post('/api/v1/auth/login').send({ email: u.email, password: 'Wrong-Pass-1' }).expect(401);
       const unknown = await t.http().post('/api/v1/auth/login').send({ email: t.email('nobody'), password: 'Wrong-Pass-1' }).expect(401);
       expect(wrong.body.code).toBe('INVALID_CREDENTIALS');
-      expect(unknown.body).toEqual(wrong.body);
+      // Everything but the per-request id is identical, so the error does not reveal whether the email exists.
+      const withoutId = (body: Record<string, unknown>) => Object.fromEntries(Object.entries(body).filter(([k]) => k !== 'requestId'));
+      expect(withoutId(unknown.body)).toEqual(withoutId(wrong.body));
     });
 
     it('never signs a customer in with a password, even if one exists', async () => {
@@ -248,8 +250,8 @@ describe('Auth (e2e)', () => {
       const me = await t.http().get('/api/v1/me').set(u.auth).expect(200);
       expect(me.body).toMatchObject({ id: u.id, role: 'CUSTOMER', email: null, phone: u.phone, phoneVerified: true, scope: { cityIds: [], stationIds: [] } });
 
-      const updated = await t.http().patch('/api/v1/me').set(u.auth).send({ fullName: 'New Name' }).expect(200);
-      expect(updated.body.fullName).toBe('New Name');
+      const updated = await t.http().patch('/api/v1/me').set(u.auth).send({ fullName: 'e2e-New Name' }).expect(200);
+      expect(updated.body.fullName).toBe('e2e-New Name');
     });
 
     it('does not let users change their role, status or email through /me', async () => {
@@ -259,30 +261,64 @@ describe('Auth (e2e)', () => {
       }
     });
 
-    it('resets verification when the phone changes, then verifies the new number with a code', async () => {
+    it('saves a new phone only after its code is confirmed', async () => {
       const u = await t.asRole('CUSTOMER');
       const newPhone = t.phone();
-      const changed = await t.http().patch('/api/v1/me').set(u.auth).send({ phone: newPhone }).expect(200);
-      expect(changed.body).toMatchObject({ phone: newPhone, phoneVerified: false });
+      await t.http().post('/api/v1/auth/phone/change').set(u.auth).send({ phone: newPhone }).expect(200);
 
-      await t.http().post('/api/v1/auth/otp/send').set(u.auth).expect(200);
-      const tooSoon = await t.http().post('/api/v1/auth/otp/send').set(u.auth).expect(429);
+      // Nothing is saved yet.
+      const before = await t.http().get('/api/v1/me').set(u.auth).expect(200);
+      expect(before.body).toMatchObject({ phone: u.phone, phoneVerified: true });
+
+      const tooSoon = await t.http().post('/api/v1/auth/phone/change').set(u.auth).send({ phone: newPhone }).expect(429);
       expect(tooSoon.body.code).toBe('OTP_RESEND_TOO_SOON');
-      const wrong = await t.http().post('/api/v1/auth/otp/verify').set(u.auth).send({ code: '000000' }).expect(400);
+      const wrong = await t.http().post('/api/v1/auth/phone/change/verify').set(u.auth).send({ code: '000000' }).expect(400);
       expect(wrong.body.code).toBe('OTP_INVALID');
-      await t.http().post('/api/v1/auth/otp/verify').set(u.auth).send({ code: 'abc' }).expect(400);
-      await t.http().post('/api/v1/auth/otp/verify').set(u.auth).send({ code: OTP_CODE }).expect(204);
+      await t.http().post('/api/v1/auth/phone/change/verify').set(u.auth).send({ code: 'abc' }).expect(400);
+      await t.http().post('/api/v1/auth/phone/change/verify').set(u.auth).send({ code: OTP_CODE }).expect(204);
 
-      const me = await t.http().get('/api/v1/me').set(u.auth).expect(200);
-      expect(me.body.phoneVerified).toBe(true);
-      await t.http().post('/api/v1/auth/otp/send').set(u.auth).expect(409);
+      const after = await t.http().get('/api/v1/me').set(u.auth).expect(200);
+      expect(after.body).toMatchObject({ phone: newPhone, phoneVerified: true });
+
+      // The code is single-use.
+      const again = await t.http().post('/api/v1/auth/phone/change/verify').set(u.auth).send({ code: OTP_CODE }).expect(400);
+      expect(again.body.code).toBe('OTP_EXPIRED');
+      const same = await t.http().post('/api/v1/auth/phone/change').set(u.auth).send({ phone: newPhone }).expect(409);
+      expect(same.body.code).toBe('PHONE_UNCHANGED');
     });
 
-    it('rejects a phone number that belongs to someone else', async () => {
+    it('does not accept a phone number through PATCH /me any more', async () => {
+      const u = await t.asRole('CUSTOMER');
+      await t.http().patch('/api/v1/me').set(u.auth).send({ phone: t.phone() }).expect(400);
+      const me = await t.http().get('/api/v1/me').set(u.auth).expect(200);
+      expect(me.body.phone).toBe(u.phone);
+    });
+
+    it('rejects a new phone number that belongs to someone else, before sending a code', async () => {
       const a = await t.asRole('CUSTOMER');
       const b = await t.createUser('CUSTOMER');
-      const res = await t.http().patch('/api/v1/me').set(a.auth).send({ phone: b.phone }).expect(409);
+      const res = await t.http().post('/api/v1/auth/phone/change').set(a.auth).send({ phone: b.phone }).expect(409);
       expect(res.body.code).toBe('PHONE_TAKEN');
+      const confirm = await t.http().post('/api/v1/auth/phone/change/verify').set(a.auth).send({ code: OTP_CODE }).expect(400);
+      expect(confirm.body.code).toBe('OTP_EXPIRED');
+    });
+
+    it('rejects a malformed new phone number and a confirm with no pending change', async () => {
+      const u = await t.asRole('CUSTOMER');
+      await t.http().post('/api/v1/auth/phone/change').set(u.auth).send({ phone: '98765' }).expect(400);
+      await t.http().post('/api/v1/auth/phone/change').send({ phone: t.phone() }).expect(401);
+      const res = await t.http().post('/api/v1/auth/phone/change/verify').set(u.auth).send({ code: OTP_CODE }).expect(400);
+      expect(res.body.code).toBe('OTP_EXPIRED');
+    });
+
+    it('verifies an existing unverified (staff) number with a code', async () => {
+      const customer = await t.createUser('STATION_EMPLOYEE', { phone: t.phone() });
+      const auth = { Authorization: `Bearer ${(await t.login(customer)).accessToken}` };
+      await t.http().post('/api/v1/auth/otp/send').set(auth).expect(200);
+      await t.http().post('/api/v1/auth/otp/verify').set(auth).send({ code: OTP_CODE }).expect(204);
+      const me = await t.http().get('/api/v1/me').set(auth).expect(200);
+      expect(me.body.phoneVerified).toBe(true);
+      await t.http().post('/api/v1/auth/otp/send').set(auth).expect(409);
     });
 
     it('requires a phone before verification can be requested', async () => {
@@ -291,12 +327,11 @@ describe('Auth (e2e)', () => {
       expect(res.body.code).toBe('PHONE_REQUIRED');
     });
 
-    it('locks the profile verification code after too many wrong attempts', async () => {
+    it('locks the new-number code after too many wrong attempts', async () => {
       const u = await t.asRole('CUSTOMER');
-      await t.http().patch('/api/v1/me').set(u.auth).send({ phone: t.phone() }).expect(200);
-      await t.http().post('/api/v1/auth/otp/send').set(u.auth).expect(200);
-      for (let i = 0; i < 5; i++) await t.http().post('/api/v1/auth/otp/verify').set(u.auth).send({ code: '000000' }).expect(400);
-      const locked = await t.http().post('/api/v1/auth/otp/verify').set(u.auth).send({ code: OTP_CODE }).expect(429);
+      await t.http().post('/api/v1/auth/phone/change').set(u.auth).send({ phone: t.phone() }).expect(200);
+      for (let i = 0; i < 5; i++) await t.http().post('/api/v1/auth/phone/change/verify').set(u.auth).send({ code: '000000' }).expect(400);
+      const locked = await t.http().post('/api/v1/auth/phone/change/verify').set(u.auth).send({ code: OTP_CODE }).expect(429);
       expect(locked.body.code).toBe('OTP_TOO_MANY_ATTEMPTS');
     });
   });

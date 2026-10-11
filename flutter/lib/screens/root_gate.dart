@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../auth/auth_controller.dart';
 import '../widgets/load_states.dart';
 import '../widgets/wordmark.dart';
+import 'bookings_tab.dart';
 import 'home_tab.dart';
 import 'login_screen.dart';
 import 'profile_tab.dart';
@@ -69,14 +70,19 @@ class _MainShellState extends State<MainShell> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: IndexedStack(index: _index, children: const [HomeTab(), StationsTab(), ProfileTab()]),
-      // Bookings joins in Phase 4.
+      body: IndexedStack(index: _index, children: [
+        HomeTab(active: _index == 0),
+        const StationsTab(),
+        BookingsTab(active: _index == 2, onFindScooter: () => setState(() => _index = 1)),
+        ProfileTab(active: _index == 3),
+      ]),
       bottomNavigationBar: NavigationBar(
         selectedIndex: _index,
         onDestinationSelected: (i) => setState(() => _index = i),
         destinations: const [
           NavigationDestination(icon: Icon(Icons.home_outlined), selectedIcon: Icon(Icons.home), label: 'Home'),
           NavigationDestination(icon: Icon(Icons.place_outlined), selectedIcon: Icon(Icons.place), label: 'Stations'),
+          NavigationDestination(icon: Icon(Icons.confirmation_number_outlined), selectedIcon: Icon(Icons.confirmation_number), label: 'Bookings'),
           NavigationDestination(icon: Icon(Icons.person_outline), selectedIcon: Icon(Icons.person), label: 'Profile'),
         ],
       ),

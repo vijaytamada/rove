@@ -1,4 +1,7 @@
 import { ACCOUNTS, loginPhone } from "./env.mjs";
+import { execSync } from "node:child_process";
+// Counters from earlier runs (failed logins per email and per address, request rates) would lock this script out.
+for (const pattern of ["login:fail:*", "login:ip:*", "rl:*"]) execSync(`docker exec rove-redis sh -c "redis-cli --scan --pattern '${pattern}' | xargs -r redis-cli del"`, { stdio: "ignore" });
 // API security/robustness sweep against the running backend (http://localhost:3001).
 const BASE = "http://localhost:3001";
 const results = [];
@@ -24,7 +27,9 @@ const employee = await login("employee.indiranagar@rove.local", ACCOUNTS.manager
 // 1. Every route in the OpenAPI spec: unauthenticated and wrong-role behaviour.
 const spec = (await j("GET", "/api/docs-json")).data;
 const uuid = "00000000-0000-4000-8000-000000000000";
-const publicPaths = new Set(["/api/v1/health", "/api/v1/auth/phone/request", "/api/v1/auth/phone/verify", "/api/v1/auth/phone/signup", "/api/v1/auth/login", "/api/v1/auth/refresh", "/api/v1/auth/logout", "/api/v1/cities", "/api/v1/cities/{cityId}/stations", "/api/v1/stations/{id}", "/api/v1/stations/{stationId}/vehicles"]);
+const publicPaths = new Set(["/api/v1/health", "/api/v1/health/live", "/api/v1/health/ready", "/api/v1/auth/phone/request", "/api/v1/auth/phone/verify", "/api/v1/auth/phone/signup", "/api/v1/auth/login", "/api/v1/auth/refresh", "/api/v1/auth/logout", "/api/v1/cities", "/api/v1/cities/{cityId}/stations", "/api/v1/stations/{id}", "/api/v1/stations/{stationId}/vehicles", "/api/v1/vehicles/{id}", "/api/v1/bookings/quote", "/api/v1/telemetry"]);
+// Customer-only routes: a customer is allowed in (checked below that staff are not).
+const customerOnly = new Set(["/api/v1/kyc/status", "/api/v1/kyc/start", "/api/v1/bookings", "/api/v1/bookings/{id}", "/api/v1/bookings/{id}/pay", "/api/v1/bookings/{id}/cancel", "/api/v1/bookings/{id}/settlement", "/api/v1/bookings/{id}/settlement/pay", "/api/v1/dashboard/customer"]);
 let routeCount = 0;
 for (const [path, methods] of Object.entries(spec.paths)) {
   for (const method of Object.keys(methods)) {
@@ -36,18 +41,67 @@ for (const [path, methods] of Object.entries(spec.paths)) {
     if (!publicPaths.has(path)) {
       check(`anon ${m} ${path} -> 401`, anon.status === 401, `got ${anon.status}`);
       const cust = await j(m, url, { token: customer, body });
-      const allowedForCustomer = ["/api/v1/me", "/api/v1/auth/otp/send", "/api/v1/auth/otp/verify"].includes(path);
+      const allowedForCustomer = ["/api/v1/me", "/api/v1/auth/otp/send", "/api/v1/auth/otp/verify", "/api/v1/auth/phone/change", "/api/v1/auth/phone/change/verify", "/api/v1/notifications", "/api/v1/notifications/unread-count", "/api/v1/notifications/read-all", "/api/v1/notifications/{id}/read"].includes(path) || customerOnly.has(path);
+      if (customerOnly.has(path)) {
+        for (const [who, token] of [["admin", admin], ["manager", manager], ["employee", employee]]) {
+          check(`${who} ${m} ${path} -> 403 (customers only)`, (await j(m, url, { token, body })).status === 403);
+        }
+      }
       if (!allowedForCustomer) check(`customer ${m} ${path} -> 403`, cust.status === 403, `got ${cust.status}`);
     }
   }
 }
 check(`checked ${routeCount} routes from OpenAPI`, routeCount > 30);
 
+// 1b. Notifications are private to the signed-in user: staff have their own (empty) inbox and cannot read a customer's.
+const note = (await j("GET", "/api/v1/notifications?limit=1", { token: customer })).data;
+check("customer inbox is a page of messages", Array.isArray(note.items) && typeof note.total === "number");
+check("unread count is a number", typeof (await j("GET", "/api/v1/notifications/unread-count", { token: customer })).data.count === "number");
+check("staff inbox is empty", (await j("GET", "/api/v1/notifications", { token: employee })).data.total === 0);
+if (note.items[0]) {
+  const mine = note.items[0].id;
+  check("staff cannot mark a customer's message read (404)", (await j("POST", `/api/v1/notifications/${mine}/read`, { token: employee, body: {} })).status === 404);
+}
+check("a bad notifications filter is a clean 400", (await j("GET", "/api/v1/notifications?unread=maybe", { token: customer })).status === 400);
+
+// 1c. Audit trail and identity-check reset: super admin only. The KYC webhook is public but refuses unsigned messages.
+check("audit trail readable by admin", (await j("GET", "/api/v1/audit-logs?limit=1", { token: admin })).status === 200);
+for (const [who, token] of [["manager", manager], ["employee", employee], ["customer", customer]]) {
+  check(`${who} cannot read the audit trail`, (await j("GET", "/api/v1/audit-logs", { token })).status === 403);
+  check(`${who} cannot reset an identity check`, (await j("POST", `/api/v1/kyc/${uuid}/reset`, { token, body: {} })).status === 403);
+}
+check("KYC webhook without a signature is refused (401)", (await j("POST", "/api/v1/webhooks/kyc", { body: { providerRef: "x", status: "VERIFIED" } })).status === 401);
+check("KYC webhook with a wrong signature is refused (401)", (await j("POST", "/api/v1/webhooks/kyc", { body: { providerRef: "x", status: "VERIFIED" }, headers: { "x-kyc-signature": "ab".repeat(32) } })).status === 401);
+check("audit trail never shows a password", !/password|passwordHash/i.test((await j("GET", "/api/v1/audit-logs?limit=100", { token: admin })).text));
+
+// 1d. Telemetry: trackers post with a device key (no login); staff read the live fleet within their scope.
+const reading = { vehicleId: uuid, recordedAt: new Date().toISOString(), latitude: 12.97, longitude: 77.6, speedKmh: 10, batteryPercent: 50, odometerKm: 1, ignition: true };
+for (const [label, headers] of [["no key", {}], ["a wrong key", { "x-device-key": "wrong-key-wrong-key-1" }]]) {
+  check(`telemetry ingest with ${label} is refused (401)`, (await j("POST", "/api/v1/telemetry", { body: { readings: [reading] }, headers })).status === 401);
+}
+check("telemetry ingest ignores a user token (401)", (await j("POST", "/api/v1/telemetry", { token: admin, body: { readings: [reading] } })).status === 401);
+check("customers cannot read the live fleet", (await j("GET", "/api/v1/fleet/live", { token: customer })).status === 403);
+check("anonymous cannot read the live fleet", (await j("GET", "/api/v1/fleet/live")).status === 401);
+check("an employee reads the live fleet", (await j("GET", "/api/v1/fleet/live", { token: employee })).status === 200);
+const liveAdmin = (await j("GET", "/api/v1/fleet/live", { token: admin })).data;
+const liveEmployee = (await j("GET", "/api/v1/fleet/live", { token: employee })).data;
+check("the live fleet shows an employee fewer scooters than the admin", liveEmployee.vehicles.length < liveAdmin.vehicles.length);
+check("the live fleet never names a rider", !/phone|fullName|pin|customer/i.test(JSON.stringify(liveAdmin)));
+check("customers cannot read a scooter's path", (await j("GET", `/api/v1/vehicles/${uuid}/telemetry`, { token: customer })).status === 403);
+
 // 2. Role boundaries on key admin actions.
 check("employee cannot create city", (await j("POST", "/api/v1/cities", { token: employee, body: { name: "x", state: "y" } })).status === 403);
 check("manager cannot create city", (await j("POST", "/api/v1/cities", { token: manager, body: { name: "x", state: "y" } })).status === 403);
 check("manager cannot create vehicle model", (await j("POST", "/api/v1/vehicle-models", { token: manager, body: { brand: "a", name: "b", rangeKm: 1, topSpeedKmh: 1 } })).status === 403);
 const blrStation = (await j("GET", "/api/v1/manage/stations?limit=100", { token: admin })).data.items.find((s) => s.name === "Indiranagar");
+check("manager cannot read the admin dashboard", (await j("GET", "/api/v1/dashboard/admin", { token: manager })).status === 403);
+check("employee cannot read the admin dashboard", (await j("GET", "/api/v1/dashboard/admin", { token: employee })).status === 403);
+check("employee cannot read a city dashboard", (await j("GET", `/api/v1/dashboard/city/${blrStation.cityId}`, { token: employee })).status === 403);
+check("manager (Hyderabad) cannot read the Bengaluru city dashboard", (await j("GET", `/api/v1/dashboard/city/${blrStation.cityId}`, { token: manager })).status === 403);
+check("manager (Hyderabad) cannot read a Bengaluru station dashboard", (await j("GET", `/api/v1/dashboard/station/${blrStation.id}`, { token: manager })).status === 403);
+check("employee can read their own station dashboard", (await j("GET", `/api/v1/dashboard/station/${blrStation.id}`, { token: employee })).status === 200);
+check("admin can read the admin dashboard", (await j("GET", "/api/v1/dashboard/admin", { token: admin })).status === 200);
+check("a bad dashboard range is a clean 400", (await j("GET", "/api/v1/dashboard/admin?range=forever", { token: admin })).status === 400);
 check("manager (Hyderabad) cannot create station in Bengaluru", (await j("POST", "/api/v1/stations", { token: manager, body: { cityId: blrStation.cityId, name: "Hack", address: "x", latitude: 1, longitude: 1, capacity: 1 } })).status === 403);
 
 // 3. Malformed / hostile input must give clean 4xx, never 5xx or stack traces.

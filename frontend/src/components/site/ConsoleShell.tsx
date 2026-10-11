@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Building2, LayoutDashboard, MapPin, Package, Truck, User, Users, Bike } from "lucide-react";
+import { Building2, History, LayoutDashboard, Map as MapIcon, MapPin, Package, Receipt, Tag, Truck, User, Users, Bike } from "lucide-react";
 import type { ReactNode } from "react";
 import { logout } from "@/app/actions/auth";
 import { Wordmark } from "@/components/app/Wordmark";
@@ -27,10 +27,15 @@ export async function ConsoleShell({ children }: { children: ReactNode }) {
           { href: "/admin/stations", label: "Stations", icon: MapPin },
           { href: "/admin/fleet", label: "Fleet", icon: Bike },
           { href: "/admin/models", label: "Vehicle models", icon: Package },
+          { href: "/admin/pricing", label: "Pricing", icon: Tag },
           { href: "/admin/staff", label: "Staff", icon: Users },
+          ...(user?.role === "SUPER_ADMIN" ? [{ href: "/admin/audit", label: "Audit trail", icon: History }] : []),
         ]
       : []),
-    { href: "/staff", label: "Station console", icon: Truck },
+    { href: "/staff", label: "Station desk", icon: Truck, exact: true },
+    { href: "/staff/map", label: "Live map", icon: MapIcon },
+    { href: "/staff/settlements", label: "Settlements", icon: Receipt },
+    { href: "/staff/fleet", label: "Scooters", icon: Bike },
     { href: "/profile", label: "Profile", icon: User },
   ];
 
@@ -46,8 +51,8 @@ export async function ConsoleShell({ children }: { children: ReactNode }) {
   );
 
   return (
-    <div className="min-h-dvh bg-bg md:flex">
-      <aside className="hidden w-64 shrink-0 flex-col border-r border-line bg-surface p-4 md:flex">
+    <div className="min-h-dvh bg-bg xl:flex">
+      <aside className="hidden w-64 shrink-0 flex-col border-r border-line bg-surface p-4 xl:flex">
         <Link href="/" aria-label="Home" className="px-3 py-3">
           <Wordmark className="text-xl" />
         </Link>
@@ -71,7 +76,7 @@ export async function ConsoleShell({ children }: { children: ReactNode }) {
       </aside>
 
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="border-b border-line bg-surface md:hidden">
+        <header className="border-b border-line bg-surface xl:hidden">
           <div className="flex h-14 items-center justify-between px-4">
             <Link href="/" aria-label="Home">
               <Wordmark className="text-xl" />
@@ -82,7 +87,7 @@ export async function ConsoleShell({ children }: { children: ReactNode }) {
               </button>
             </form>
           </div>
-          <nav aria-label="Console" className="flex gap-1 overflow-x-auto px-3 pb-2">
+          <nav aria-label="Console" className="no-scrollbar flex gap-1 overflow-x-auto px-3 pb-2">
             {links.map(({ href, label, exact }) => (
               <NavLink key={href} href={href} exact={exact}>
                 {label}
@@ -90,7 +95,7 @@ export async function ConsoleShell({ children }: { children: ReactNode }) {
             ))}
           </nav>
         </header>
-        <main className="mx-auto w-full max-w-5xl flex-1 p-4 sm:p-6 lg:p-10">{children}</main>
+        <main className="mx-auto w-full max-w-7xl flex-1 px-4 py-6 sm:px-8 sm:py-8 xl:px-12 xl:py-10">{children}</main>
       </div>
     </div>
   );

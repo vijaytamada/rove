@@ -40,6 +40,14 @@ Order matters: **infra → backend → web → emulator → Flutter**.
 
 Customers sign in with their phone number and a code, on the website (http://localhost:3000/login) and in the Flutter app; a new number creates an account after asking for a name. Staff, city managers and admins sign in with email and password at http://localhost:3000/login/staff (the website only; the Flutter app is customer-only).
 
+Mock payment and KYC: `PAYMENT_PROVIDER=mock` charges nothing (the pay screen has a "make this payment fail" box outside production) and `KYC_PROVIDER=mock` verifies the customer at once. Neither is allowed in production. Demo scooters are priced by `npm run prisma:seed` (one default plan per model).
+
+Notifications and the minute job: customers get an in-app inbox (bell on the website and in the app). `NOTIFICATION_PROVIDER=mock` only logs each message in the backend console (a real SMS sender comes with Phase 9). The backend also runs a job every minute that expires unpaid holds and sends reminders (`JOBS_ENABLED=true` by default; set `false` to switch it off). It takes a Redis lock, so several backend copies are safe. To see it work by hand: book a scooter, backdate `holdExpiresAt` in the `Booking` row, and within a minute the booking becomes `EXPIRED` and the customer has a notice.
+
+Mock identity check, to try every state: a customer whose name contains `REJECT` is rejected, one whose name contains `PENDING` stays pending until a signed webhook arrives (`POST /api/v1/webhooks/kyc`, header `x-kyc-signature` = hex HMAC-SHA256 of the exact body using `KYC_WEBHOOK_SECRET`), everyone else is verified at once. The audit trail is at http://localhost:3000/admin/audit (super admin).
+
+Telemetry: `TELEMETRY_PROVIDER=simulator` (the default in `.env.example`) moves any scooter that is out on a ride and sends a heartbeat for parked ones, so the website's **Live map** (`/staff/map`) has something to show: hand a scooter over on the station desk and watch it move. `mock` makes nothing up; post readings yourself to `POST /api/v1/telemetry` with `x-device-key` set to `TELEMETRY_INGEST_KEY`. **Before running the backend e2e tests, stop the dev backend or set `TELEMETRY_PROVIDER=mock` for it:** the simulator also writes readings for the tests' scooters in the shared database.
+
 Mock OTP: verification codes are always `123456` and are logged by the backend. Never enabled in production (the app refuses to start with `OTP_PROVIDER=mock` when `NODE_ENV=production`).
 
 Backend takes ~15–20 s to start. Check it: open `http://localhost:3001/api/v1/health` → `{"status":"ok","checks":{"database":"up","redis":"up"}}`.
@@ -66,6 +74,16 @@ Release builds block plain HTTP; cleartext is enabled only in the Android **debu
   cd flutter  && flutter analyze && flutter test
   ```
 
+## 5b. Production-style run, backups and CI (Phase 12)
+- **Settings** (root `.env`; all optional in development): `DB_POOL_MAX` (database connections per process, default 10; Postgres allows 100 in total for every process), `DASHBOARD_CACHE_SECONDS` (dashboards may be this old, default 10, 0 = always fresh), `RATE_LIMIT_MULTIPLIER` (scales every per-IP limit; raise it when many real users share one address, e.g. mobile carriers), `TRUST_PROXY` (reverse proxies in front of the API, default 0), `RATE_LIMIT_ENABLED` (default true), `SWAGGER_ENABLED`, `LOG_FORMAT`, `JOBS_ENABLED`, `TELEMETRY_*`, `KYC_WEBHOOK_SECRET`. In production the API **refuses to start** with a dev-only secret or key, the mock OTP/KYC/payment providers, the telemetry simulator, or a `localhost` `CORS_ORIGIN` (it lists everything that is wrong).
+- **Client addresses:** the website forwards each visitor's address to the API in `X-Forwarded-For`; that is only trustworthy when the proxy in front of the website overwrites the header itself. Behind your proxy set `TRUST_PROXY=1` for the API. Without a proxy (development) every local client shares one address, so the per-IP counters (`rl:*`, `login:ip:*`) are shared: the QA scripts clear them when they start, and if you lock yourself out of the dev sign-in clear them with `docker exec rove-redis sh -c "redis-cli --scan --pattern 'login:ip:*' | xargs -r redis-cli del"` (and `rl:*`).
+- **Images:** `docker build --target runtime -t rove-backend backend`, `docker build --build-arg NEXT_PUBLIC_API_URL=<api address> -t rove-web frontend`. The backend image has a `migrate` target that applies the migrations and exits.
+- **Whole stack:** `cp infra/production.env.example infra/production.env`, fill it in, then `docker compose -f infra/docker-compose.prod.yml --env-file infra/production.env up -d --build`. It starts Postgres and Redis (not published), runs the migrations, then starts the API (127.0.0.1:3001) and the website (127.0.0.1:3000) behind health checks; put a TLS reverse proxy in front. Because the production guard refuses the mock providers, this only starts for real once Phases 9 and 10 are done; to smoke-test it earlier, override `NODE_ENV=development` for the backend in a throwaway compose override file (this is how it was verified).
+- **Backups:** `tools/ops/backup-db.sh` (compressed dump, keeps 14 days, writes to `./backups` or `BACKUP_DIR`; `DATABASE_URL=... ` for a server instead of the dev container), `tools/ops/restore-db.sh <file> <database>` (never touches an existing database without `FORCE=yes`), `tools/ops/verify-backup.sh <file>` (restores into a scratch database and compares every table's row count with the live one; development container only). Schedule the backup (cron or a scheduler), copy it off the machine, and run the verify regularly.
+- **CI:** `.github/workflows/ci.yml` runs on every push and pull request: backend (lint, build, unit, end-to-end against Postgres and Redis service containers, audit of production dependencies), website (lint, build), Flutter (analyze, test) and the two Docker builds. There is no Git remote yet, so it has not run on GitHub; the same commands were run locally.
+
+- **Load test:** `tools/load/` (see `docs/TESTING.md`, *Load test*): `node tools/load/prepare.mjs`, `node tools/load/server.mjs`, `node tools/load/run.mjs setup`, then `node tools/load/run.mjs run mixed --vus 50`. It uses its own database and Redis database 1 and never touches the development data; remove it with `node tools/load/prepare.mjs --drop`.
+
 ## 6. Stop
 `Ctrl+C` in T2/T3/T4. Infra: `cd infra && docker compose down` (keeps data) or `docker compose down -v` (deletes data).
 
@@ -91,18 +109,23 @@ Other local projects use 5432/6379, which is why Rove uses 5442/6389. Change via
 | Android Studio device dialog hides the system image | Pixel 10 profile wants API 36+; API 35 images show as "unsupported" there but still work |
 
 ## 9. Branches and workflow
-Two long-lived branches, **kept at the same commit**, plus short-lived feature branches:
+Two long-lived branches plus short-lived feature branches:
 
 | Branch | Purpose |
 |---|---|
-| `main` | Last fully tested, releasable state. Same commit as `dev` |
-| `dev` | Integration branch. Same commit as `main`; feature branches start here |
-| `feature/<name>` | Where all changes are made. Deleted after merging |
+| `main` | Stable, released state. Updated only from `dev`, in batches |
+| `dev` | Integration branch that collects finished features. Feature branches start here |
+| `feature/<name>` | Where all changes are made. Deleted after merging into `dev` |
 
-1. Start: `git checkout dev` then `git checkout -b feature/<name>`. Commit code and docs there.
-2. When the feature is stable, run the checks in `docs/TESTING.md` (backend tests, website lint + build, Flutter tests + analyze, the three `tools/qa` scripts).
-3. Merge into `dev`: `git checkout dev`, `git merge --no-ff feature/<name>`.
-4. Bring `main` level: `git checkout main`, `git merge --ff-only dev`, then `git checkout dev`.
-5. `git branch -d feature/<name>`.
+**Per feature**
+1. `git checkout dev`, then `git checkout -b feature/<name>`. Commit code and docs there.
+2. When the feature is done, run its tests plus the checks in `docs/TESTING.md` that apply.
+3. `git checkout dev`, `git merge --no-ff feature/<name>`, then `git branch -d feature/<name>`.
+
+**Releasing to `main`** (when several features on `dev` are stable together)
+1. Run the full re-test in `docs/TESTING.md` on `dev` (backend tests, website lint + build, Flutter tests + analyze, the three `tools/qa` scripts).
+2. `git checkout main`, `git merge --no-ff dev`, then `git checkout dev`.
+
+`main` and `dev` were level on 2026-10-04 (`187a0a7`); `dev` runs ahead of `main` from here.
 
 No remote is configured yet. To publish, add one (`git remote add origin <url>`) and push both branches (`git push -u origin main dev`).

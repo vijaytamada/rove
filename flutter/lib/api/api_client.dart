@@ -17,13 +17,16 @@ class ApiOk extends ApiResult {
 }
 
 class ApiError extends ApiResult {
-  const ApiError({required this.status, required this.code, required this.message, this.details = const []});
+  const ApiError({required this.status, required this.code, required this.message, this.details = const [], this.info});
 
   /// 0 means the server could not be reached.
   final int status;
   final String code;
   final String message;
   final List<String> details;
+
+  /// Data some errors carry instead of a list of problems (e.g. which booking is owed money).
+  final Map<String, dynamic>? info;
 
   /// Maps validation messages ("email must be an email") onto form fields.
   Map<String, String> fieldErrors(Iterable<String> fields) {
@@ -61,18 +64,25 @@ class ApiClient {
 
   Future<ApiResult> get(String path, {bool auth = true}) => _send('GET', path, auth: auth);
 
-  Future<ApiResult> post(String path, {Object? body, bool auth = true}) =>
-      _send('POST', path, body: body ?? const {}, auth: auth);
+  Future<ApiResult> post(String path, {Object? body, bool auth = true, Map<String, String>? headers}) =>
+      _send('POST', path, body: body ?? const {}, auth: auth, headers: headers);
 
   Future<ApiResult> patch(String path, {Object? body}) => _send('PATCH', path, body: body ?? const {});
 
-  Future<ApiResult> _send(String method, String path, {Object? body, bool auth = true, bool retried = false}) async {
+  Future<ApiResult> _send(
+    String method,
+    String path, {
+    Object? body,
+    bool auth = true,
+    bool retried = false,
+    Map<String, String>? headers,
+  }) async {
     final token = auth ? await tokens.readAccess() : null;
     final http.Response response;
     try {
       final request = http.Request(method, Uri.parse('$baseUrl$path'))
         ..headers['Accept'] = 'application/json'
-        ..headers.addAll({if (token != null) 'Authorization': 'Bearer $token'});
+        ..headers.addAll({if (token != null) 'Authorization': 'Bearer $token', ...?headers});
       if (body != null) {
         request.headers['Content-Type'] = 'application/json';
         request.body = jsonEncode(body);
@@ -87,7 +97,7 @@ class ApiClient {
     }
 
     if (response.statusCode == 401 && auth && !retried && await _refreshTokens()) {
-      return _send(method, path, body: body, auth: auth, retried: true);
+      return _send(method, path, body: body, auth: auth, retried: true, headers: headers);
     }
     return _parse(response);
   }
@@ -102,7 +112,8 @@ class ApiClient {
         status: response.statusCode,
         code: json['code'] as String? ?? 'ERROR',
         message: json['message'] as String? ?? 'Something went wrong. Try again.',
-        details: (json['details'] as List?)?.map((e) => '$e').toList() ?? const [],
+        details: json['details'] is List ? (json['details'] as List).map((e) => '$e').toList() : const [],
+        info: json['details'] is Map<String, dynamic> ? json['details'] as Map<String, dynamic> : null,
       );
     } catch (_) {
       return ApiError(status: response.statusCode, code: 'ERROR', message: 'Something went wrong. Try again.');

@@ -20,6 +20,14 @@ export function num(form: FormData, name: string): number | undefined {
   return raw === "" ? undefined : Number(raw);
 }
 
+/** A rupee amount typed in a form ("49" or "49.50") as integer paise, or undefined when empty. */
+export function paise(form: FormData, name: string): number | undefined {
+  const raw = text(form, name);
+  if (raw === "") return undefined;
+  const value = Number(raw);
+  return Number.isFinite(value) ? Math.round(value * 100) : NaN;
+}
+
 /** Submitted string fields except secrets, to repopulate a form after an error. */
 export function valuesOf(form: FormData, exclude: string[] = ["password"]): Record<string, string> {
   const values: Record<string, string> = {};
@@ -40,6 +48,13 @@ const FIELD_LABELS: Record<string, string> = {
   opensAt: "Opening time",
   closesAt: "Closing time",
   modelId: "Model",
+  hourlyRateAmount: "Rate per hour",
+  dailyRateAmount: "Day rate",
+  includedKmPerHour: "Included km per hour",
+  extraKmRateAmount: "Extra km rate",
+  lateFeePerHourAmount: "Late fee per hour",
+  graceMinutes: "Grace period",
+  depositAmount: "Deposit",
   stationId: "Station",
   cityId: "City",
 };

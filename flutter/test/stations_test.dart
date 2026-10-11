@@ -74,26 +74,34 @@ void main() {
     });
     await openStations(tester, env);
 
+    // Cities are not laid out side by side: the first one is selected and the others sit behind the selector.
     expect(find.text('Bengaluru'), findsOneWidget);
-    expect(find.text('Hyderabad'), findsOneWidget);
+    expect(find.text('Hyderabad'), findsNothing);
     expect(find.text('Indiranagar'), findsOneWidget);
     expect(find.text('3 available'), findsOneWidget);
     expect(find.text('None available'), findsOneWidget);
     expect(find.text('06:00 – 22:00'), findsOneWidget);
     expect(find.text('Open 24 hours'), findsOneWidget);
 
-    // Switching city loads its stations.
+    // Switching city: open the selector, pick one, and its stations load.
+    await tester.tap(find.text('Bengaluru'));
+    await tester.pumpAndSettle();
+    expect(find.text('Choose a city'), findsOneWidget);
+    expect(find.text('Karnataka'), findsOneWidget);
     await tester.tap(find.text('Hyderabad'));
     await tester.pumpAndSettle();
+    expect(find.text('Choose a city'), findsNothing);
     expect(find.text('HITEC City'), findsOneWidget);
     expect(find.text('Indiranagar'), findsNothing);
 
+    await tester.tap(find.text('Hyderabad'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('Bengaluru'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Indiranagar'));
     await tester.pumpAndSettle();
 
-    expect(find.text('Available scooters (2)'), findsOneWidget);
+    expect(find.text('Available now (2)'), findsOneWidget);
     expect(find.text('Scooter BLR-001'), findsOneWidget);
     expect(find.text('92%'), findsOneWidget);
     expect(find.text('90 km'), findsNWidgets(2));
@@ -112,8 +120,8 @@ void main() {
     await openStations(tester, env);
     await tester.tap(find.text('Indiranagar'));
     await tester.pumpAndSettle();
-    expect(find.text('Available scooters (0)'), findsOneWidget);
-    expect(find.textContaining('No scooters are available here'), findsOneWidget);
+    expect(find.text('Available now (0)'), findsOneWidget);
+    expect(find.textContaining('No scooters are free here'), findsOneWidget);
   });
 
   testWidgets('shows an error with retry when stations fail to load, then recovers', (tester) async {
