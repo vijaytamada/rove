@@ -11,7 +11,9 @@ describe('Hardening: per-IP limits, client IP, request ids (e2e)', () => {
 
   const api = (path: string) => `/api/v1${path}`;
   // 203.0.113.0/24 is reserved for documentation: safe fake client addresses, and cleanup knows to remove their counters.
-  const freshIp = () => `203.0.113.${1 + Math.floor(Math.random() * 253)}`;
+  // Handed out in turn from a random start, never twice in one run: a repeated address would arrive already blocked by an earlier test.
+  let nextIp = Math.floor(Math.random() * 253);
+  const freshIp = () => `203.0.113.${1 + (nextIp++ % 253)}`;
 
   /** Sends `n` requests as `ip` in parallel batches; returns every response status. */
   async function flood(n: number, ip: string, send: (ip: string, i: number) => Promise<{ status: number }>) {
