@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Building2, History, LayoutDashboard, MapPin, Package, Receipt, Tag, Truck, User, Users, Bike } from "lucide-react";
+import { Building2, History, LayoutDashboard, Map as MapIcon, MapPin, Package, Receipt, Tag, Truck, User, Users, Bike } from "lucide-react";
 import type { ReactNode } from "react";
 import { logout } from "@/app/actions/auth";
 import { Wordmark } from "@/components/app/Wordmark";
@@ -33,6 +33,7 @@ export async function ConsoleShell({ children }: { children: ReactNode }) {
         ]
       : []),
     { href: "/staff", label: "Station desk", icon: Truck, exact: true },
+    { href: "/staff/map", label: "Live map", icon: MapIcon },
     { href: "/staff/settlements", label: "Settlements", icon: Receipt },
     { href: "/staff/fleet", label: "Scooters", icon: Bike },
     { href: "/profile", label: "Profile", icon: User },

@@ -405,3 +405,34 @@ export interface AuditEntryView {
   /** Null when the system acted (a provider webhook). */
   actor: { id: string; fullName: string; role: Role } | null;
 }
+
+export interface LiveVehicle {
+  vehicleId: string;
+  code: string;
+  status: VehicleStatus;
+  model: string;
+  batteryPercent: number | null;
+  station: { id: string; name: string } | null;
+  /** The ride it is out on (never the rider). */
+  booking: { id: string; code: string } | null;
+  position: {
+    latitude: number;
+    longitude: number;
+    speedKmh: number;
+    ignition: boolean;
+    recordedAt: string;
+    /** The tracker has gone quiet for longer than it should. */
+    stale: boolean;
+    source: "TRACKER" | "STATION";
+  } | null;
+}
+
+export interface LiveFleet {
+  generatedAt: string;
+  stations: { id: string; name: string; cityId: string; latitude: number; longitude: number }[];
+  vehicles: LiveVehicle[];
+}
+
+export interface TelemetryTrail {
+  points: { recordedAt: string; latitude: number; longitude: number; speedKmh: number; batteryPercent: number; odometerKm: number; ignition: boolean }[];
+}

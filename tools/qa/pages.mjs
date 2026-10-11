@@ -65,6 +65,7 @@ const routes = [
   ["/bookings/not-a-uuid/settle", { anon: "login", customer: "404", employee: "to:/staff", manager: "to:/admin", admin: "to:/admin" }],
   ["/notifications", { anon: "login", customer: "ok", employee: "to:/staff", manager: "to:/admin", admin: "to:/admin" }],
   ["/admin/audit", { anon: "staff-login", customer: "to:/", employee: "to:/staff", manager: "to:/admin", admin: "ok" }],
+  ["/staff/map", { anon: "staff-login", customer: "to:/", employee: "ok", manager: "ok", admin: "ok" }],
   ["/verify", { anon: "login", customer: "ok", employee: "to:/staff", manager: "to:/admin", admin: "to:/admin" }],
   [`/book/${vehBlr.id}`, { anon: "ok", customer: "ok", employee: "ok", manager: "ok", admin: "ok" }],
   ["/book/not-a-uuid", { anon: "404", customer: "404", employee: "404", manager: "404", admin: "404" }],
@@ -152,5 +153,11 @@ checks.push(["staff header has no bell", !/aria-label="Notifications/.test(await
 const t28 = await text("/admin/audit", tokens.admin);
 checks.push(["admin audit trail page lists who did what", /Audit trail/.test(t28) && (/Nothing recorded/.test(t28) || /Handed a scooter over|Took a scooter back|Identity|Added|Changed|System/.test(t28))]);
 checks.push(["only admins see the audit link in the console", /Audit trail/.test(await text("/admin", tokens.admin)) && !/Audit trail/.test(await text("/admin", tokens.manager))]);
+const t29 = await text("/staff/map", tokens.employee);
+checks.push(["live map page renders for staff", /Live map/.test(t29)]);
+const apiLive = await fetch(WEB + "/api/live-fleet", { headers: { Cookie: `rove_at=${tokens.employee}` } });
+checks.push(["the live map data route answers a signed-in employee with the fleet", apiLive.status === 200 && Array.isArray((await apiLive.json()).vehicles)]);
+checks.push(["the live map data route refuses a visitor who is not signed in", (await fetch(WEB + "/api/live-fleet")).status === 401]);
+checks.push(["a customer's session cannot use the live map data route", (await fetch(WEB + "/api/live-fleet", { headers: { Cookie: `rove_at=${tokens.customer}` } })).status === 403]);
 for (const [name, ok] of checks) { console.log(`${ok ? "PASS" : "FAIL"}  ${name}`); if (!ok) failures++; }
 process.exit(failures ? 1 : 0);

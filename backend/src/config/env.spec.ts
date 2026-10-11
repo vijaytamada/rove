@@ -15,6 +15,14 @@ describe('validateEnv', () => {
     expect(env.OTP_PROVIDER).toBe('mock');
     expect(env.NOTIFICATION_PROVIDER).toBe('mock');
     expect(env.JOBS_ENABLED).toBe(true);
+    expect(env.TELEMETRY_PROVIDER).toBe('mock');
+    expect(env.TELEMETRY_RETENTION_DAYS).toBe(7);
+  });
+
+  it('refuses the telemetry simulator and the dev device key in production', () => {
+    const real = { ...base, NODE_ENV: 'production', JWT_ACCESS_SECRET: 'a-real-long-random-secret', KYC_WEBHOOK_SECRET: 'a-real-webhook-secret-123' };
+    expect(() => validateEnv({ ...real, TELEMETRY_PROVIDER: 'simulator' })).toThrow(/simulator/);
+    expect(() => validateEnv(real)).toThrow(/dev-only key/);
   });
 
   it('reads JOBS_ENABLED as a boolean', () => {

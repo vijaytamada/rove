@@ -214,6 +214,8 @@ export async function createTestApp(): Promise<TestApp> {
       if (keys.length) await redis.client.del(...keys);
       // Order matters: refunds -> payments -> bookings -> users; plans and vehicles reference models and cities.
       const ofTestUsers = { user: { id: { in: users.map((u) => u.id) } } };
+      const testVehicles = await prisma.vehicle.findMany({ where: { code: { startsWith: 'E2E-' } }, select: { id: true } });
+      if (testVehicles.length) await redis.client.del(...testVehicles.map((v) => `telemetry:latest:${v.id}`));
       await prisma.auditLog.deleteMany({
         where: { OR: [{ actorId: { in: users.map((u) => u.id) } }, { entityId: { in: users.map((u) => u.id) } }] },
       });

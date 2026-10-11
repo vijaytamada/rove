@@ -18,6 +18,7 @@ import { DashboardModule } from './modules/dashboard/dashboard.module.js';
 import { JobsModule } from './modules/jobs/jobs.module.js';
 import { NotificationsModule } from './modules/notifications/notifications.module.js';
 import { RbacModule } from './modules/rbac/rbac.module.js';
+import { TelemetryModule } from './modules/telemetry/telemetry.module.js';
 import { UsersModule } from './modules/users/users.module.js';
 
 @Module({
@@ -43,6 +44,7 @@ import { UsersModule } from './modules/users/users.module.js';
     SettlementsModule,
     DashboardModule,
     NotificationsModule,
+    TelemetryModule,
     JobsModule,
     HealthModule,
   ],

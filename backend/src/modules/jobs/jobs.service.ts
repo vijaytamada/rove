@@ -1,6 +1,7 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../../infra/prisma/prisma.service.js';
 import { NotificationEventsService } from '../notifications/notification-events.service.js';
+import { TelemetryService } from '../telemetry/telemetry.service.js';
 import type { PlanRates } from '../pricing/rental-quote.js';
 import { REMINDER_RULES, pickupReminderDue, returnOverdueDue, returnReminderDue } from './reminder-rules.js';
 
@@ -15,6 +16,7 @@ export interface JobCounts {
   pickupReminders: number;
   returnReminders: number;
   overdueNotices: number;
+  telemetryPruned: number;
 }
 
 /**
@@ -28,10 +30,11 @@ export class JobsService {
   constructor(
     @Inject(PrismaService) private readonly prisma: PrismaService,
     @Inject(NotificationEventsService) private readonly events: NotificationEventsService,
+    @Inject(TelemetryService) private readonly telemetry: TelemetryService,
   ) {}
 
   async runOnce(now = new Date()): Promise<JobCounts> {
-    const counts: JobCounts = { holdsExpired: 0, holdNotices: 0, pickupReminders: 0, returnReminders: 0, overdueNotices: 0 };
+    const counts: JobCounts = { holdsExpired: 0, holdNotices: 0, pickupReminders: 0, returnReminders: 0, overdueNotices: 0, telemetryPruned: 0 };
     // A failing step must not stop the others.
     await this.step('expire holds', async () => {
       counts.holdsExpired = await this.expireHolds(now);
@@ -40,6 +43,7 @@ export class JobsService {
     await this.step('pickup reminders', async () => (counts.pickupReminders = await this.pickupReminders(now)));
     await this.step('return reminders', async () => (counts.returnReminders = await this.returnReminders(now)));
     await this.step('overdue notices', async () => (counts.overdueNotices = await this.overdueNotices(now)));
+    await this.step('prune telemetry', async () => (counts.telemetryPruned = await this.telemetry.prune(now)));
     return counts;
   }
 

@@ -24,7 +24,7 @@ const employee = await login("employee.indiranagar@rove.local", ACCOUNTS.manager
 // 1. Every route in the OpenAPI spec: unauthenticated and wrong-role behaviour.
 const spec = (await j("GET", "/api/docs-json")).data;
 const uuid = "00000000-0000-4000-8000-000000000000";
-const publicPaths = new Set(["/api/v1/health", "/api/v1/auth/phone/request", "/api/v1/auth/phone/verify", "/api/v1/auth/phone/signup", "/api/v1/auth/login", "/api/v1/auth/refresh", "/api/v1/auth/logout", "/api/v1/cities", "/api/v1/cities/{cityId}/stations", "/api/v1/stations/{id}", "/api/v1/stations/{stationId}/vehicles", "/api/v1/vehicles/{id}", "/api/v1/bookings/quote"]);
+const publicPaths = new Set(["/api/v1/health", "/api/v1/auth/phone/request", "/api/v1/auth/phone/verify", "/api/v1/auth/phone/signup", "/api/v1/auth/login", "/api/v1/auth/refresh", "/api/v1/auth/logout", "/api/v1/cities", "/api/v1/cities/{cityId}/stations", "/api/v1/stations/{id}", "/api/v1/stations/{stationId}/vehicles", "/api/v1/vehicles/{id}", "/api/v1/bookings/quote", "/api/v1/telemetry"]);
 // Customer-only routes: a customer is allowed in (checked below that staff are not).
 const customerOnly = new Set(["/api/v1/kyc/status", "/api/v1/kyc/start", "/api/v1/bookings", "/api/v1/bookings/{id}", "/api/v1/bookings/{id}/pay", "/api/v1/bookings/{id}/cancel", "/api/v1/bookings/{id}/settlement", "/api/v1/bookings/{id}/settlement/pay", "/api/v1/dashboard/customer"]);
 let routeCount = 0;
@@ -70,6 +70,21 @@ for (const [who, token] of [["manager", manager], ["employee", employee], ["cust
 check("KYC webhook without a signature is refused (401)", (await j("POST", "/api/v1/webhooks/kyc", { body: { providerRef: "x", status: "VERIFIED" } })).status === 401);
 check("KYC webhook with a wrong signature is refused (401)", (await j("POST", "/api/v1/webhooks/kyc", { body: { providerRef: "x", status: "VERIFIED" }, headers: { "x-kyc-signature": "ab".repeat(32) } })).status === 401);
 check("audit trail never shows a password", !/password|passwordHash/i.test((await j("GET", "/api/v1/audit-logs?limit=100", { token: admin })).text));
+
+// 1d. Telemetry: trackers post with a device key (no login); staff read the live fleet within their scope.
+const reading = { vehicleId: uuid, recordedAt: new Date().toISOString(), latitude: 12.97, longitude: 77.6, speedKmh: 10, batteryPercent: 50, odometerKm: 1, ignition: true };
+for (const [label, headers] of [["no key", {}], ["a wrong key", { "x-device-key": "wrong-key-wrong-key-1" }]]) {
+  check(`telemetry ingest with ${label} is refused (401)`, (await j("POST", "/api/v1/telemetry", { body: { readings: [reading] }, headers })).status === 401);
+}
+check("telemetry ingest ignores a user token (401)", (await j("POST", "/api/v1/telemetry", { token: admin, body: { readings: [reading] } })).status === 401);
+check("customers cannot read the live fleet", (await j("GET", "/api/v1/fleet/live", { token: customer })).status === 403);
+check("anonymous cannot read the live fleet", (await j("GET", "/api/v1/fleet/live")).status === 401);
+check("an employee reads the live fleet", (await j("GET", "/api/v1/fleet/live", { token: employee })).status === 200);
+const liveAdmin = (await j("GET", "/api/v1/fleet/live", { token: admin })).data;
+const liveEmployee = (await j("GET", "/api/v1/fleet/live", { token: employee })).data;
+check("the live fleet shows an employee fewer scooters than the admin", liveEmployee.vehicles.length < liveAdmin.vehicles.length);
+check("the live fleet never names a rider", !/phone|fullName|pin|customer/i.test(JSON.stringify(liveAdmin)));
+check("customers cannot read a scooter's path", (await j("GET", `/api/v1/vehicles/${uuid}/telemetry`, { token: customer })).status === 403);
 
 // 2. Role boundaries on key admin actions.
 check("employee cannot create city", (await j("POST", "/api/v1/cities", { token: employee, body: { name: "x", state: "y" } })).status === 403);

@@ -46,6 +46,8 @@ Notifications and the minute job: customers get an in-app inbox (bell on the web
 
 Mock identity check, to try every state: a customer whose name contains `REJECT` is rejected, one whose name contains `PENDING` stays pending until a signed webhook arrives (`POST /api/v1/webhooks/kyc`, header `x-kyc-signature` = hex HMAC-SHA256 of the exact body using `KYC_WEBHOOK_SECRET`), everyone else is verified at once. The audit trail is at http://localhost:3000/admin/audit (super admin).
 
+Telemetry: `TELEMETRY_PROVIDER=simulator` (the default in `.env.example`) moves any scooter that is out on a ride and sends a heartbeat for parked ones, so the website's **Live map** (`/staff/map`) has something to show: hand a scooter over on the station desk and watch it move. `mock` makes nothing up; post readings yourself to `POST /api/v1/telemetry` with `x-device-key` set to `TELEMETRY_INGEST_KEY`. **Before running the backend e2e tests, stop the dev backend or set `TELEMETRY_PROVIDER=mock` for it:** the simulator also writes readings for the tests' scooters in the shared database.
+
 Mock OTP: verification codes are always `123456` and are logged by the backend. Never enabled in production (the app refuses to start with `OTP_PROVIDER=mock` when `NODE_ENV=production`).
 
 Backend takes ~15–20 s to start. Check it: open `http://localhost:3001/api/v1/health` → `{"status":"ok","checks":{"database":"up","redis":"up"}}`.
